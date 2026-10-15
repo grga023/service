@@ -153,7 +153,7 @@
       <div class="modal-header"><div><p class="eyebrow">TEAM ACCESS</p><h2 id="user-modal-title">Add team member</h2></div><button type="button" class="icon-button" data-close="user-modal" aria-label="Close">×</button></div>
       <input type="hidden" name="id">
       <label>Username<input name="username" required maxlength="80" autocomplete="off"></label>
-      <label id="password-field">Temporary password<input name="password" type="password" minlength="12" autocomplete="new-password"><span class="field-hint">At least 12 characters. Leave blank when editing to keep the current password.</span></label>
+      <label id="password-field">Password<input name="password" type="password" minlength="8" autocomplete="new-password"><span class="field-hint">At least 8 characters. Leave blank when editing to keep the current password.</span></label>
       <fieldset class="role-options"><legend>Roles <span class="optional">Select one or more</span></legend><label><input type="checkbox" name="roles" value="admin"> Administrator</label><label><input type="checkbox" name="roles" value="dispatcher"> Call receiver / dispatcher</label><label><input type="checkbox" name="roles" value="technician"> Service technician</label></fieldset>
       <label id="active-field" class="check-line hidden"><input type="checkbox" name="active"> Account active</label>
       <p id="user-error" class="form-error" role="alert"></p>

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import argparse
+import getpass
 import hashlib
 import hmac
 import json
@@ -18,7 +20,8 @@ from urllib.parse import unquote, urlparse
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
 DB_PATH = Path(os.environ.get("DATABASE_PATH", ROOT / "data" / "service.sqlite3"))
-SESSION_HOURS = 12
+SESSION_COOKIE_SECONDS = 400 * 24 * 60 * 60
+SESSION_EXPIRY = datetime.max.replace(tzinfo=timezone.utc).isoformat()
 ROLES = {"admin", "dispatcher", "technician"}
 STATUSES = {"received", "in_progress", "done", "problem"}
 PBKDF2_ITERATIONS = 310_000
@@ -151,8 +154,8 @@ def initialize():
             if generated:
                 alphabet = string.ascii_letters + string.digits + "-_!@"
                 password = "".join(secrets.choice(alphabet) for _ in range(20))
-            elif len(password) < 12 or len(password) > 200:
-                raise ValueError("ADMIN_PASSWORD must be between 12 and 200 characters.")
+            elif len(password) < 8 or len(password) > 200:
+                raise ValueError("ADMIN_PASSWORD must be between 8 and 200 characters.")
             if len(username) > 80:
                 raise ValueError("ADMIN_USERNAME must be 80 characters or fewer.")
             salt, digest = hash_password(password)
@@ -169,6 +172,18 @@ def initialize():
 def phone_key(phone):
     digits = "".join(character for character in phone if character.isdigit())
     return digits or phone.strip().casefold()
+
+
+def reset_admin_password(username, password):
+    if not isinstance(password, str) or not 8 <= len(password) <= 200:
+        raise ValueError("Password must be between 8 and 200 characters.")
+    with connect() as db:
+        user = db.execute("SELECT * FROM users WHERE username=? COLLATE NOCASE", (username,)).fetchone()
+        if not user or "admin" not in json.loads(user["roles"]):
+            raise ValueError("Administrator account not found.")
+        salt, digest = hash_password(password)
+        db.execute("UPDATE users SET salt=?,password_hash=? WHERE id=?", (salt, digest, user["id"]))
+        db.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
 
 
 def upsert_customer(db, name, phone, address, timestamp=None):
@@ -337,6 +352,16 @@ def completion_payload(data):
 class ServiceHandler(BaseHTTPRequestHandler):
     server_version = "FurnaceDesk/1.0"
 
+    def end_headers(self):
+        token = getattr(self, "_renew_session", None)
+        if token:
+            secure = "; Secure" if os.environ.get("COOKIE_SECURE") == "1" else ""
+            self.send_header(
+                "Set-Cookie",
+                f"session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_COOKIE_SECONDS}{secure}",
+            )
+        super().end_headers()
+
     def log_message(self, fmt, *args):
         print(f"{self.address_string()} - {fmt % args}", flush=True)
 
@@ -372,6 +397,7 @@ class ServiceHandler(BaseHTTPRequestHandler):
         return value
 
     def current_user(self, db):
+        self._renew_session = None
         cookie = SimpleCookie()
         try:
             cookie.load(self.headers.get("Cookie", ""))
@@ -386,6 +412,13 @@ class ServiceHandler(BaseHTTPRequestHandler):
                WHERE s.token_hash=? AND s.expires_at>? AND u.active=1""",
             (hashlib.sha256(token.encode()).hexdigest(), datetime.now(timezone.utc).isoformat()),
         ).fetchone()
+        if row:
+            self._renew_session = token
+            db.execute(
+                "UPDATE sessions SET expires_at=? WHERE token_hash=? AND expires_at!=?",
+                (SESSION_EXPIRY, hashlib.sha256(token.encode()).hexdigest(), SESSION_EXPIRY),
+            )
+            db.commit()
         return row
 
     def require_roles(self, user, *roles):
@@ -568,15 +601,14 @@ class ServiceHandler(BaseHTTPRequestHandler):
                     self.send_error_json(HTTPStatus.UNAUTHORIZED, "Incorrect username or password.")
                     return
                 token = secrets.token_urlsafe(32)
-                expires = datetime.now(timezone.utc) + timedelta(hours=SESSION_HOURS)
                 db.execute("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,?)",
-                           (hashlib.sha256(token.encode()).hexdigest(), user["id"], expires.isoformat()))
+                           (hashlib.sha256(token.encode()).hexdigest(), user["id"], SESSION_EXPIRY))
                 db.commit()
                 secure = "; Secure" if os.environ.get("COOKIE_SECURE") == "1" else ""
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
-                self.send_header("Set-Cookie", f"session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_HOURS * 3600}{secure}")
+                self.send_header("Set-Cookie", f"session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_COOKIE_SECONDS}{secure}")
                 body = json.dumps({"user": public_user(user)}).encode()
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
@@ -613,6 +645,7 @@ class ServiceHandler(BaseHTTPRequestHandler):
                     db.commit()
                     self.send_json({"ticket": public_ticket(row)})
                 elif path == "/api/logout":
+                    self._renew_session = None
                     token = SimpleCookie(self.headers.get("Cookie", "")).get("session")
                     if token:
                         db.execute("DELETE FROM sessions WHERE token_hash=?", (hashlib.sha256(token.value.encode()).hexdigest(),))
@@ -641,8 +674,8 @@ class ServiceHandler(BaseHTTPRequestHandler):
                     self.require_roles(user, "admin")
                     username = clean_text(data.get("username", ""), "Username", 80, True)
                     password = data.get("password", "")
-                    if not isinstance(password, str) or len(password) < 12 or len(password) > 200:
-                        raise ValueError("Password must be between 12 and 200 characters.")
+                    if not isinstance(password, str) or len(password) < 8 or len(password) > 200:
+                        raise ValueError("Password must be between 8 and 200 characters.")
                     roles = parse_roles(data.get("roles"))
                     salt, digest = hash_password(password)
                     try:
@@ -732,8 +765,8 @@ class ServiceHandler(BaseHTTPRequestHandler):
                             raise ValueError("At least one active administrator must remain.")
                     password = data.get("password", "")
                     if password:
-                        if not isinstance(password, str) or len(password) < 12 or len(password) > 200:
-                            raise ValueError("Password must be between 12 and 200 characters.")
+                        if not isinstance(password, str) or len(password) < 8 or len(password) > 200:
+                            raise ValueError("Password must be between 8 and 200 characters.")
                         salt, digest = hash_password(password)
                         db.execute("UPDATE users SET username=?,roles=?,active=?,salt=?,password_hash=? WHERE id=?",
                                    (username, json.dumps(roles), int(active), salt, digest, user_id))
@@ -802,8 +835,22 @@ class ServiceHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    initialize()
-    host = os.environ.get("HOST", "0.0.0.0")
-    port = int(os.environ.get("PORT", "8000"))
-    print(f"FurnaceDesk listening on {host}:{port}", flush=True)
-    ThreadingHTTPServer((host, port), ServiceHandler).serve_forever()
+    parser = argparse.ArgumentParser(description="FurnaceDesk service desk")
+    parser.add_argument("--reset-admin-password", metavar="USERNAME", help="Reset an existing administrator password")
+    args = parser.parse_args()
+    if args.reset_admin_password:
+        password = getpass.getpass("New password: ")
+        confirmation = getpass.getpass("Confirm new password: ")
+        if password != confirmation:
+            parser.error("Passwords do not match.")
+        try:
+            reset_admin_password(args.reset_admin_password, password)
+        except ValueError as exc:
+            parser.error(str(exc))
+        print("Administrator password changed. Existing sessions revoked.")
+    else:
+        initialize()
+        host = os.environ.get("HOST", "0.0.0.0")
+        port = int(os.environ.get("PORT", "8000"))
+        print(f"FurnaceDesk listening on {host}:{port}", flush=True)
+        ThreadingHTTPServer((host, port), ServiceHandler).serve_forever()

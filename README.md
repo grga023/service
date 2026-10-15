@@ -38,7 +38,17 @@ The first account is an administrator. Use **Team members** to add accounts and 
 - **Call receiver / dispatcher** — creates and manages tickets, schedules visits, and assigns technicians.
 - **Service technician** — sees assigned tickets and can update their status, parts, and service notes.
 
-New passwords must be at least 12 characters. Deactivating an account prevents it from signing in.
+New passwords must be at least 8 characters; use a long, unique password for an internet-facing installation. Deactivating an account prevents it from signing in.
+
+Reset an existing administrator password interactively (the password is not placed in shell history):
+
+```sh
+docker compose exec furnace-desk python server.py --reset-admin-password admin
+```
+
+Enter the new password twice. Resetting it revokes existing sessions. Administrators can also change passwords from **Team members**.
+
+Login sessions no longer have a fixed application expiry. The browser cookie is renewed for 400 days on authenticated requests (browsers may impose their own storage limits). Closing the browser or restarting the container does not sign you out. Logout, administrator password reset, account deactivation, or clearing browser cookies ends access. This is not a guarantee that a browser will retain a cookie forever.
 
 ## Service board and calendar
 
