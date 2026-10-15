@@ -56,6 +56,14 @@ The active service board shows **Received**, **In progress**, and **Problem**. N
 
 Every saved service creates or updates a customer profile, matched by phone number. Use **Customers** to search by name or phone and review that customer's previous services and appliance models. When creating a new service, selecting a returning customer fills in their contact details automatically. Click a calendar day to create a service already scheduled for that day; click an existing visit or customer-history record to edit it.
 
+### Using a phone
+
+The phone layout uses bottom navigation for **Board**, **Calendar**, **Done**, and **Customers** (for administrators and dispatchers). Team management, calendar export, and sign-out are in the top-left menu.
+
+On the board, choose a status tab to see full-width cards without sideways scrolling. Tap a card to edit or complete it, use **Call customer** to dial, or use **Move to** to change its status. Desktop drag-and-drop remains available. On the calendar, tap a date to see its visits below the month, then use **Schedule** to add a service on that day. Customer profiles open separately from the list; **All customers** returns to search.
+
+Phone forms fill the screen, with independently scrolling fields and fixed save/cancel controls. Needed part names and quantities stay inline; completion parts use labeled fields for quantity, customer unit price, and discounted unit cost. Inputs are sized to avoid automatic iPhone text zoom, and navigation and form actions account for device safe areas.
+
 Use **Sync calendar** or **Add to device calendar** to download the authenticated `.ics` calendar. The file can be imported into Apple Calendar or Google Calendar on desktop and mobile. The calendar uses local appointment times; importing the file creates a snapshot, so export it again after schedule changes.
 
 ## Configuration
