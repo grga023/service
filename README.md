@@ -11,7 +11,7 @@ docker compose up --build -d
 docker compose logs -f furnace-desk
 ```
 
-Open `http://localhost:8000`. On a first run, the application creates an `admin` account and prints a randomly generated initial password in the container logs. Retrieve it with:
+Open `http://localhost:8081`. Docker maps host port `8081` to port `8000` inside the container to avoid conflicts with other services. To use a different host port, set `PORT` in `.env`. On a first run, the application creates an `admin` account and prints a randomly generated initial password in the container logs. Retrieve it with:
 
 ```sh
 docker compose logs furnace-desk
@@ -22,7 +22,7 @@ For a planned installation, create a `.env` file before starting the service:
 ```dotenv
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=replace-with-a-long-unique-password
-PORT=8000
+PORT=8081
 COOKIE_SECURE=1
 ```
 
@@ -52,7 +52,7 @@ Use **Sync calendar** or **Add to device calendar** to download the authenticate
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `8000` | Host port in Docker Compose |
+| `PORT` | `8081` | Host port in Docker Compose (mapped to container port `8000`) |
 | `ADMIN_USERNAME` | `admin` | Username created on an empty database |
 | `ADMIN_PASSWORD` | generated | Initial admin password; set before first start |
 | `COOKIE_SECURE` | `0` | Set to `1` when using HTTPS |
