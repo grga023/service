@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101318">
+  <title>FurnaceDesk — Service management</title>
+  <link rel="stylesheet" href="/styles.css?v=3">
+</head>
+<body>
+  <main id="login-screen" class="login-screen">
+    <form id="login-form" class="login-card">
+      <div class="brand-mark">F</div>
+      <p class="eyebrow">SERVICE MANAGEMENT</p>
+      <h1>Welcome back</h1>
+      <p class="muted">Sign in to manage your service desk.</p>
+      <label>Username<input name="username" autocomplete="username" required autofocus></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="button button-primary button-wide" type="submit">Sign in</button>
+      <p id="login-error" class="form-error" role="alert"></p>
+    </form>
+  </main>
+
+  <div id="app" class="app-shell hidden">
+    <aside id="sidebar" class="sidebar">
+      <a class="brand" href="#" aria-label="FurnaceDesk home"><span class="brand-mark">F</span><span>furnace<span class="brand-light">desk</span></span></a>
+      <div class="nav-label">WORKSPACE</div>
+      <button class="nav-item active" data-view="board"><span class="nav-icon">▦</span> Service board</button>
+      <button class="nav-item" data-view="done"><span class="nav-icon">✓</span> Done services</button>
+      <button id="customers-nav" class="nav-item hidden" data-view="customers"><span class="nav-icon">◉</span> Customers</button>
+      <button class="nav-item" data-view="calendar"><span class="nav-icon">▣</span> Calendar</button>
+      <div class="sidebar-bottom">
+        <a class="nav-item calendar-export" href="/calendar.ics"><span class="nav-icon">↓</span> Add to device calendar</a>
+        <button id="users-nav" class="nav-item hidden"><span class="nav-icon">◉</span> Team members</button>
+        <div class="user-block">
+          <div id="user-avatar" class="avatar">U</div>
+          <div class="user-meta"><strong id="user-name">User</strong><span id="user-role">Team member</span></div>
+          <button id="logout" class="icon-button" title="Sign out" aria-label="Sign out">↗</button>
+        </div>
+      </div>
+    </aside>
+
+    <section class="main-area">
+      <header class="topbar">
+        <button id="menu-toggle" class="icon-button menu-toggle" aria-label="Open menu">☰</button>
+        <div class="breadcrumbs">Workspace <span>/</span> <strong id="page-title">Service board</strong></div>
+        <div class="top-actions">
+          <button id="sync-calendar" class="button button-quiet calendar-export" type="button">↓ <span>Sync calendar</span></button>
+          <button id="new-ticket" class="button button-primary">＋ <span>New service</span></button>
+        </div>
+      </header>
+      <div id="board-view" class="view-content">
+        <div class="page-heading">
+          <div><p class="eyebrow">OVERVIEW</p><h1>Service board</h1><p class="muted">Drag services between stages. Mark complete to record costs and move them to customer history.</p></div>
+          <div class="board-tools"><label class="search-box"><span>⌕</span><input id="ticket-search" type="search" placeholder="Search customer, model..."></label><span id="ticket-count" class="count-pill">0 services</span></div>
+        </div>
+        <div id="board" class="kanban-board"></div>
+      </div>
+      <div id="done-view" class="view-content hidden">
+        <div class="page-heading">
+          <div><p class="eyebrow">COMPLETED WORK</p><h1>Done services</h1><p class="muted">Earned = labor + transport + parts margin. Parts margin is customer price minus your discounted cost.</p></div>
+          <div class="board-tools"><label class="search-box"><span>⌕</span><input id="done-search" type="search" placeholder="Search customer, phone, model..."></label><span id="done-count" class="count-pill">0 services</span></div>
+        </div>
+        <div class="earnings-summary">
+          <div><span>Total earned</span><strong id="done-earnings">0.00</strong></div>
+          <div><span>Parts margin</span><strong id="done-parts-margin">0.00</strong></div>
+          <div><span>Labor + transport</span><strong id="done-labor-transport">0.00</strong></div>
+        </div>
+        <div id="done-list" class="done-list"></div>
+      </div>
+      <div id="calendar-view" class="view-content hidden">
+        <div class="page-heading calendar-heading">
+          <div><p class="eyebrow">SCHEDULE</p><h1>Service calendar</h1><p class="muted">Plan visits and keep your day in view.</p></div>
+          <div class="calendar-actions"><button id="calendar-prev" class="button button-quiet" aria-label="Previous month">←</button><h2 id="calendar-month"></h2><button id="calendar-next" class="button button-quiet" aria-label="Next month">→</button></div>
+        </div>
+        <div class="calendar-layout">
+          <section class="calendar-panel"><div class="calendar-grid calendar-weekdays"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div><div id="calendar-days" class="calendar-grid calendar-days"></div></section>
+          <aside class="agenda-panel"><div class="agenda-title"><div><p class="eyebrow">UPCOMING</p><h2>Next visits</h2></div><span class="agenda-icon">◷</span></div><div id="agenda-list" class="agenda-list"></div></aside>
+        </div>
+      </div>
+      <div id="users-view" class="view-content hidden">
+        <div class="page-heading"><div><p class="eyebrow">WORKSPACE</p><h1>Team members</h1><p class="muted">Manage access and team roles.</p></div><button id="add-user" class="button button-primary">＋ Add member</button></div>
+        <div class="users-panel"><div class="user-table-head"><span>MEMBER</span><span>ROLES</span><span>STATUS</span><span>ACTION</span></div><div id="user-list"></div></div>
+      </div>
+      <div id="customers-view" class="view-content hidden">
+        <div class="page-heading">
+          <div><p class="eyebrow">CUSTOMER HISTORY</p><h1>Customers</h1><p class="muted">Find customers and see every appliance and previous service.</p></div>
+          <label class="search-box customer-search"><span>⌕</span><input id="customer-search" type="search" placeholder="Search name or phone..."></label>
+        </div>
+        <div class="customers-layout">
+          <section id="customer-list" class="customer-list" aria-label="Customer search results"></section>
+          <section id="customer-detail" class="customer-detail"><div class="customer-placeholder">Search for a customer by name or phone to see their service history.</div></section>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="ticket-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="ticket-modal-title">
+    <div class="modal-backdrop" data-close="ticket-modal"></div>
+    <form id="ticket-form" class="modal-card modal-large">
+      <div class="modal-header"><div><p class="eyebrow">SERVICE RECORD</p><h2 id="ticket-modal-title">New service</h2></div><button type="button" class="icon-button" data-close="ticket-modal" aria-label="Close">×</button></div>
+      <input type="hidden" name="id">
+      <div class="form-grid">
+        <label id="customer-lookup-field" class="span-two">Find returning customer
+          <span class="customer-lookup-wrap"><input id="customer-lookup" type="search" autocomplete="off" placeholder="Search saved customers by name or phone"><span id="customer-suggestions" class="customer-suggestions hidden" role="listbox"></span></span>
+          <span class="field-hint">Selecting a customer fills in their contact details and links this service to their history.</span>
+        </label>
+        <label>Customer name<input name="customer" maxlength="120" required placeholder="e.g. Alex Morgan"></label>
+        <label>Phone number<input name="phone" type="tel" maxlength="40" required placeholder="+1 555 0100"></label>
+        <label class="span-two">Service address<input name="address" maxlength="240" required placeholder="Street, city, postal code"></label>
+        <label>Boiler / stove model<input name="appliance_model" maxlength="120" required placeholder="e.g. Celtic, Alfa"></label>
+        <label id="status-field">Service status<select name="status"><option value="received">Received</option><option value="in_progress">In progress</option><option value="problem">Problem / missing part</option></select></label>
+        <label>Appointment start<input name="appointment_start" type="datetime-local"></label>
+        <label>Estimated effort <span class="optional">(optional)</span><input id="estimated-effort" name="estimated_effort" type="text" inputmode="decimal" maxlength="16" placeholder="1h, 1.5d, 1w" autocomplete="off"><span class="field-hint">1d = 8h · 1w = 7d · <strong id="effort-hours">Enter an estimate to see hours</strong></span></label>
+        <label id="assignee-field" class="span-two hidden">Assigned technician<select name="assignee_id"><option value="">Unassigned</option></select></label>
+        <div id="needed-parts-field" class="span-two structured-parts-field">
+          <div class="parts-header"><span>PARTS NEEDED</span><button id="add-needed-part" class="button button-quiet" type="button">＋ Add part</button></div>
+          <div id="needed-parts-list" class="parts-list"></div>
+          <span class="field-hint">Enter part names and quantities now. Add prices when completing the service.</span>
+        </div>
+        <label class="span-two">Service notes<textarea name="notes" rows="2" maxlength="4000" placeholder="Additional details"></textarea></label>
+      </div>
+      <p id="ticket-error" class="form-error" role="alert"></p>
+      <div class="modal-footer"><button type="button" id="mark-done" class="button button-done hidden">Mark service done</button><button type="button" class="button button-quiet" data-close="ticket-modal">Cancel</button><button class="button button-primary" type="submit">Save service</button></div>
+    </form>
+  </div>
+
+  <div id="completion-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="completion-modal-title">
+    <div class="modal-backdrop" data-close="completion-modal"></div>
+    <form id="completion-form" class="modal-card">
+      <div class="modal-header"><div><p class="eyebrow">SERVICE COSTS</p><h2 id="completion-modal-title">Complete service</h2></div><button type="button" class="icon-button" data-close="completion-modal" aria-label="Close">×</button></div>
+      <input type="hidden" name="ticket_id">
+      <p class="completion-intro">For each part, enter the full customer price and your discounted purchase cost. Earnings are the parts margin plus labor and transport.</p>
+      <div class="parts-header"><span>PARTS USED</span><button id="add-part" class="button button-quiet" type="button">＋ Add part</button></div>
+      <div class="parts-column-labels"><span>Part name</span><span>Qty</span><span>Full customer price</span><span>Your discounted cost</span><span></span></div>
+      <div id="parts-list" class="parts-list"></div>
+      <div class="form-grid cost-fields">
+        <label>Labor cost<input name="labor_cost" type="number" min="0" max="100000000" step="0.01" value="0" inputmode="decimal"></label>
+        <label>Transport cost<input name="transport_cost" type="number" min="0" max="100000000" step="0.01" value="0" inputmode="decimal"></label>
+      </div>
+      <div class="cost-totals">
+        <div class="cost-total"><span>Customer total</span><strong id="completion-total">0.00</strong></div>
+        <div class="cost-total earnings-total"><span>Your earnings</span><strong id="completion-earnings">0.00</strong></div>
+      </div>
+      <p id="completion-error" class="form-error" role="alert"></p>
+      <div class="modal-footer"><button type="button" class="button button-quiet" data-close="completion-modal">Cancel</button><button class="button button-primary" type="submit">Save &amp; mark done</button></div>
+    </form>
+  </div>
+
+  <div id="user-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+    <div class="modal-backdrop" data-close="user-modal"></div>
+    <form id="user-form" class="modal-card">
+      <div class="modal-header"><div><p class="eyebrow">TEAM ACCESS</p><h2 id="user-modal-title">Add team member</h2></div><button type="button" class="icon-button" data-close="user-modal" aria-label="Close">×</button></div>
+      <input type="hidden" name="id">
+      <label>Username<input name="username" required maxlength="80" autocomplete="off"></label>
+      <label id="password-field">Temporary password<input name="password" type="password" minlength="12" autocomplete="new-password"><span class="field-hint">At least 12 characters. Leave blank when editing to keep the current password.</span></label>
+      <fieldset class="role-options"><legend>Roles <span class="optional">Select one or more</span></legend><label><input type="checkbox" name="roles" value="admin"> Administrator</label><label><input type="checkbox" name="roles" value="dispatcher"> Call receiver / dispatcher</label><label><input type="checkbox" name="roles" value="technician"> Service technician</label></fieldset>
+      <label id="active-field" class="check-line hidden"><input type="checkbox" name="active"> Account active</label>
+      <p id="user-error" class="form-error" role="alert"></p>
+      <div class="modal-footer"><button type="button" class="button button-quiet" data-close="user-modal">Cancel</button><button class="button button-primary" type="submit">Save member</button></div>
+    </form>
+  </div>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/app.js?v=7" defer></script>
+</body>
+</html>
