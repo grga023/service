@@ -43,6 +43,7 @@ input[type=checkbox] { accent-color: #8ea3ff; }
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 14px; border: 1px solid transparent; border-radius: 7px; background: var(--surface-3); color: var(--text); cursor: pointer; font-size: 12px; font-weight: 650; transition: background .16s ease, border-color .16s ease; }
 .button:hover { background: #303642; }
 .button:disabled { opacity: .55; cursor: wait; }
+.notification-description { color: #a4adbb; font-size: 14px; line-height: 1.65; }
 .button-primary { border-color: #a9b8ff40; background: #8499f2; color: #101318; }
 .button-primary:hover { background: #a0b0ff; }
 .button-quiet { border-color: var(--border); background: transparent; color: #c5cad2; }

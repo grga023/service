@@ -4,8 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#101318">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FurnaceDesk">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icon-192.png">
   <title>FurnaceDesk — Service management</title>
-  <link rel="stylesheet" href="/styles.css?v=8">
+  <link rel="stylesheet" href="/styles.css?v=9">
 </head>
 <body>
   <main id="login-screen" class="login-screen">
@@ -32,6 +36,7 @@
       <button id="customers-nav" class="nav-item hidden" data-view="customers"><span class="nav-icon">◉</span> Customers</button>
       <button class="nav-item" data-view="calendar"><span class="nav-icon">▣</span> Calendar</button>
       <div class="sidebar-bottom">
+        <button id="notifications-nav" class="nav-item">Notifications</button>
         <a class="nav-item calendar-export" href="/calendar.ics"><span class="nav-icon">↓</span> Add to device calendar</a>
         <button id="users-nav" class="nav-item hidden"><span class="nav-icon">◉</span> Team members</button>
         <div class="user-block">
@@ -177,6 +182,20 @@
     </form>
   </div>
   <div id="toast" class="toast" role="status"></div>
-  <script src="/app.js?v=8" defer></script>
+  <div id="notification-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="notification-title">
+    <div class="modal-backdrop" data-close="notification-modal"></div>
+    <section class="modal-card">
+      <div class="modal-header"><div><p class="eyebrow">THIS DEVICE</p><h2 id="notification-title">Notifications</h2></div><button type="button" class="icon-button" data-close="notification-modal" aria-label="Close">×</button></div>
+      <div class="modal-body">
+        <p class="notification-description">Get a notification when a service is assigned to you, even when the app is closed. Customer contact details are not shown on the lock screen.</p>
+        <p class="notification-description">On iPhone or iPad: use iOS 16.4 or later, open this site in Safari, tap Share, then Add to Home Screen. Open FurnaceDesk from that icon and enable notifications here. HTTPS is required.</p>
+        <p id="notification-status" class="notification-description" role="status"></p>
+        <p id="notification-error" class="form-error" role="alert"></p>
+        <button id="test-notification" class="button button-quiet hidden" type="button">Send test notification</button>
+      </div>
+      <div class="modal-footer"><button id="disable-notifications" class="button button-quiet hidden" type="button">Disable on this device</button><button id="enable-notifications" class="button button-primary" type="button">Enable notifications</button></div>
+    </section>
+  </div>
+  <script src="/app.js?v=9" defer></script>
 </body>
 </html>

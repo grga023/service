@@ -16,6 +16,7 @@ from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+import push
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
@@ -146,6 +147,7 @@ def initialize():
             customer_id = upsert_customer(db, ticket["customer"], ticket["phone"], ticket["address"], ticket["created_at"])
             db.execute("UPDATE tickets SET customer_id=? WHERE id=?", (customer_id, ticket["id"]))
         db.execute("DELETE FROM sessions WHERE expires_at < ?", (datetime.now(timezone.utc).isoformat(),))
+        push.initialize(db, DB_PATH)
         count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if not count:
             username = os.environ.get("ADMIN_USERNAME", "admin").strip() or "admin"
@@ -474,7 +476,8 @@ class ServiceHandler(BaseHTTPRequestHandler):
         if path == "/":
             self.serve_static("index.html")
             return
-        if path in ("/app.js", "/styles.css"):
+        if path in ("/app.js", "/styles.css", "/sw.js", "/manifest.webmanifest",
+                    "/icon-192.png", "/icon-512.png"):
             self.serve_static(path[1:])
             return
         if path == "/health":
@@ -493,6 +496,14 @@ class ServiceHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/me":
                 self.send_json({"user": public_user(user)})
+            elif path == "/api/push":
+                session_hash = hashlib.sha256(self.session_token().encode()).hexdigest()
+                self.send_json({
+                    "public_key": push.public_key(DB_PATH.parent / "push-private.pem"),
+                    "subscribed": db.execute(
+                        "SELECT 1 FROM push_subscriptions WHERE session_hash=?", (session_hash,),
+                    ).fetchone() is not None,
+                })
             elif path == "/api/tickets":
                 if "technician" in json.loads(user["roles"]) and "admin" not in json.loads(user["roles"]) and "dispatcher" not in json.loads(user["roles"]):
                     rows = db.execute("SELECT * FROM tickets WHERE assignee_id=? ORDER BY updated_at DESC", (user["id"],))
@@ -570,13 +581,16 @@ class ServiceHandler(BaseHTTPRequestHandler):
             self.send_error_json(HTTPStatus.NOT_FOUND, "Not found.")
             return
         content_type = "text/html; charset=utf-8" if filename.endswith(".html") else (
-            "text/javascript; charset=utf-8" if filename.endswith(".js") else "text/css; charset=utf-8"
+            "text/javascript; charset=utf-8" if filename.endswith(".js") else
+            "application/manifest+json" if filename.endswith(".webmanifest") else
+            "image/png" if filename.endswith(".png") else "text/css; charset=utf-8"
         )
         body = path.read_bytes()
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "no-cache")
         self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
         self.end_headers()
         self.wfile.write(body)
@@ -620,7 +634,37 @@ class ServiceHandler(BaseHTTPRequestHandler):
                 return
             try:
                 route_parts = path.strip("/").split("/")
-                if len(route_parts) == 4 and route_parts[:2] == ["api", "tickets"] and route_parts[3] == "complete":
+                if path == "/api/push/subscribe":
+                    subscription = push.validate_subscription(data.get("subscription"))
+                    session_hash = hashlib.sha256(self.session_token().encode()).hexdigest()
+                    existing = db.execute("SELECT user_id FROM push_subscriptions WHERE endpoint=?",
+                                          (subscription["endpoint"],)).fetchone()
+                    if existing and existing["user_id"] != user["id"]:
+                        raise ValueError("This browser is subscribed to another account. Disable its notifications first.")
+                    db.execute("""
+                        INSERT INTO push_subscriptions (user_id,session_hash,endpoint,subscription_json)
+                        VALUES (?,?,?,?)
+                        ON CONFLICT(endpoint) DO UPDATE SET session_hash=excluded.session_hash,
+                            subscription_json=excluded.subscription_json
+                    """, (user["id"], session_hash, subscription["endpoint"], json.dumps(subscription)))
+                    db.commit()
+                    self.send_json({"subscribed": True})
+                elif path in ("/api/push/unsubscribe", "/api/push/test"):
+                    session_hash = hashlib.sha256(self.session_token().encode()).hexdigest()
+                    if path.endswith("/unsubscribe"):
+                        db.execute("DELETE FROM push_subscriptions WHERE session_hash=?", (session_hash,))
+                        db.commit()
+                        self.send_json({"subscribed": False})
+                    else:
+                        subscriptions = db.execute("SELECT id FROM push_subscriptions WHERE session_hash=?",
+                                                   (session_hash,)).fetchall()
+                        if not subscriptions:
+                            raise ValueError("Enable notifications on this device first.")
+                        for subscription in subscriptions:
+                            push.enqueue_test(db, subscription["id"])
+                        db.commit()
+                        self.send_json({"queued": True})
+                elif len(route_parts) == 4 and route_parts[:2] == ["api", "tickets"] and route_parts[3] == "complete":
                     ticket_id = int(route_parts[2])
                     existing = db.execute("SELECT * FROM tickets WHERE id=?", (ticket_id,)).fetchone()
                     if not existing:
@@ -668,6 +712,7 @@ class ServiceHandler(BaseHTTPRequestHandler):
                         [ticket[k] for k in keys] + [customer_id, user["id"], now, now],
                     )
                     row = db.execute("SELECT * FROM tickets WHERE id=?", (cursor.lastrowid,)).fetchone()
+                    push.enqueue_assignment(db, row)
                     db.commit()
                     self.send_json({"ticket": public_ticket(row)}, HTTPStatus.CREATED)
                 elif path == "/api/users":
@@ -737,6 +782,7 @@ class ServiceHandler(BaseHTTPRequestHandler):
                     db.execute(f"UPDATE tickets SET {assignments},customer_id=?,updated_at=? WHERE id=?",
                                [ticket[k] for k in ticket] + [customer_id, now, ticket_id])
                     row = db.execute("SELECT * FROM tickets WHERE id=?", (ticket_id,)).fetchone()
+                    push.enqueue_assignment(db, row, existing["assignee_id"])
                     db.commit()
                     self.send_json({"ticket": public_ticket(row)})
                 elif len(parts) == 3 and parts[:2] == ["api", "users"]:
@@ -850,6 +896,7 @@ if __name__ == "__main__":
         print("Administrator password changed. Existing sessions revoked.")
     else:
         initialize()
+        push.start_worker(DB_PATH, DB_PATH.parent / "push-private.pem")
         host = os.environ.get("HOST", "0.0.0.0")
         port = int(os.environ.get("PORT", "8000"))
         print(f"FurnaceDesk listening on {host}:{port}", flush=True)

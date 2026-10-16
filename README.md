@@ -66,7 +66,19 @@ Phone forms fill the screen, with independently scrolling fields and fixed save/
 
 Use **Sync calendar** or **Add to device calendar** to download the authenticated `.ics` calendar. The file can be imported into Apple Calendar or Google Calendar on desktop and mobile. The calendar uses local appointment times; importing the file creates a snapshot, so export it again after schedule changes.
 
-## Configuration
+## Phone notifications
+
+Open the workspace menu, choose **Notifications**, and select **Enable notifications** on each device that should receive assignments. Use **Send test notification** to queue a test. Newly assigned or reassigned active services notify only the assigned technician's subscribed devices; ordinary edits do not send duplicate assignment alerts. Tapping an alert opens the service after authentication. Customer names, addresses, and phone numbers are deliberately omitted from lock-screen alerts.
+
+On **iPhone/iPad (iOS/iPadOS 16.4+)**, open the HTTPS site in Safari, use **Share → Add to Home Screen**, then launch it from that icon and enable notifications inside the app. A normal Safari tab cannot receive iPhone web push. Android and supported desktop browsers can enable push from the site. Delivery depends on browser permission, connectivity, and device Focus/notification settings; it is not a guaranteed emergency alert system.
+
+Push signing keys are generated automatically as `push-private.pem` beside the SQLite database, inside the existing Docker data volume. Keep that file private and include it in backups; losing/replacing it requires devices to subscribe again. No Firebase project or Apple developer account is needed. The server needs outbound HTTPS to browser push providers (Apple, Google, Mozilla, or Microsoft). Subscriptions and queued deliveries persist across container restarts; temporary failures retry with backoff, expired subscriptions are removed, and permanent errors appear in container logs. A queued test is not a delivery confirmation.
+
+**Disable on this device** stops that device's notifications. Signing out or revoking a session also removes its subscriptions and queued messages. After signing in again, enable notifications again. Push providers necessarily handle encrypted notification delivery; service/customer records are not sent to them.
+
+For local development, install dependencies with `python -m pip install -r requirements.txt` before running `python server.py`. HTTPS is required in production (localhost is a browser development exception). The service worker does not cache authenticated pages or customer records for offline use.
+
+## Configuration reference
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -75,3 +87,4 @@ Use **Sync calendar** or **Add to device calendar** to download the authenticate
 | `ADMIN_PASSWORD` | generated | Initial admin password; set before first start |
 | `COOKIE_SECURE` | `0` | Set to `1` when using HTTPS |
 | `DATABASE_PATH` | `/data/service.sqlite3` in Docker | SQLite database path |
+| `PUSH_CONTACT` | `https://service.lil-server-lab.xyz` | Public HTTPS origin (no path or trailing slash) or `mailto:admin@your-domain.com` included in VAPID push authentication |

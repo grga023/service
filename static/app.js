@@ -4,6 +4,8 @@ const state = {
   boardStatus: "received", calendarDay: null,
 };
 const mobileLayout = window.matchMedia("(max-width: 1024px)");
+let pushRegistration = null;
+let pushSettings = null;
 const statuses = [
   { key: "received", label: "Received" },
   { key: "in_progress", label: "In progress" },
@@ -60,6 +62,100 @@ function showApp(user) {
   $("#assignee-field").classList.toggle("hidden", !canManage());
   $("#customer-lookup-field").classList.toggle("hidden", !canManage());
   showView("board");
+}
+
+async function openNotificationSettings() {
+  setMenuOpen(false);
+  if ($("#notification-modal").classList.contains("hidden")) openModal("notification-modal");
+  $("#notification-error").textContent = "";
+  $("#enable-notifications").disabled = true;
+  $("#enable-notifications").classList.remove("hidden");
+  $("#disable-notifications").classList.add("hidden");
+  $("#test-notification").classList.add("hidden");
+  const status = $("#notification-status");
+  if (!window.isSecureContext || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    status.textContent = "Push is unavailable here. Use HTTPS and a supported browser. On iPhone, open the installed Home Screen app.";
+    return;
+  }
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (ios && !navigator.standalone && !window.matchMedia("(display-mode: standalone)").matches) {
+    status.textContent = "Add FurnaceDesk to your Home Screen first, then open it from that icon.";
+    return;
+  }
+  status.textContent = "Checking this device...";
+  try {
+    await navigator.serviceWorker.register("/sw.js");
+    pushRegistration = await navigator.serviceWorker.ready;
+    pushSettings = await api("/api/push");
+    const subscription = await pushRegistration.pushManager.getSubscription();
+    const enabled = pushSettings.subscribed && !!subscription && Notification.permission === "granted";
+    status.textContent = enabled ? "Notifications are enabled on this device." :
+      Notification.permission === "denied" ? "Notifications are blocked. Allow them in your device or browser settings, then reopen this screen." :
+        "Notifications are off on this device.";
+    $("#enable-notifications").classList.toggle("hidden", enabled);
+    $("#enable-notifications").disabled = Notification.permission === "denied";
+    $("#disable-notifications").classList.toggle("hidden", !pushSettings.subscribed);
+    $("#test-notification").classList.toggle("hidden", !enabled);
+  } catch (error) {
+    $("#notification-error").textContent = error.message;
+    status.textContent = "Could not check notification settings. Close this screen and try again.";
+  }
+}
+
+$("#notifications-nav").addEventListener("click", openNotificationSettings);
+$("#enable-notifications").addEventListener("click", async () => {
+  const button = $("#enable-notifications");
+  button.disabled = true;
+  $("#notification-error").textContent = "";
+  try {
+    // Must happen directly inside a user gesture for iOS permission prompts.
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") throw new Error("Permission was not granted. You can enable notifications later in device settings.");
+    if (!pushRegistration || !pushSettings) throw new Error("Reopen notification settings and try again.");
+    const key = Uint8Array.from(atob(pushSettings.public_key.replace(/-/g, "+").replace(/_/g, "/")), (char) => char.charCodeAt(0));
+    const subscription = await pushRegistration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    await api("/api/push/subscribe", { method: "POST", body: JSON.stringify({ subscription: subscription.toJSON() }) });
+    await openNotificationSettings();
+    showToast("Notifications enabled on this device.");
+  } catch (error) {
+    $("#notification-error").textContent = error.message;
+  } finally { button.disabled = false; }
+});
+$("#disable-notifications").addEventListener("click", async () => {
+  const button = $("#disable-notifications");
+  button.disabled = true;
+  $("#notification-error").textContent = "";
+  try {
+    await api("/api/push/unsubscribe", { method: "POST", body: "{}" });
+    const subscription = await pushRegistration?.pushManager.getSubscription();
+    if (subscription && !await subscription.unsubscribe()) {
+      throw new Error("Server notifications are disabled, but the browser subscription could not be removed. Try again.");
+    }
+    await openNotificationSettings();
+  } catch (error) { $("#notification-error").textContent = error.message; }
+  finally { button.disabled = false; }
+});
+$("#test-notification").addEventListener("click", async () => {
+  const button = $("#test-notification");
+  button.disabled = true;
+  $("#notification-error").textContent = "";
+  try {
+    await api("/api/push/test", { method: "POST", body: "{}" });
+    $("#notification-status").textContent = "Test queued. If it does not arrive, check notification permissions, Focus mode, and server push-delivery logs.";
+  } catch (error) { $("#notification-error").textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
+function openNotificationTicket() {
+  const url = new URL(window.location.href);
+  const ticketId = Number(url.searchParams.get("ticket"));
+  if (!Number.isSafeInteger(ticketId) || ticketId <= 0) return;
+  url.searchParams.delete("ticket");
+  history.replaceState(null, "", url);
+  const ticket = state.tickets.find((item) => item.id === ticketId);
+  if (ticket) openTicket(ticketId);
+  else showToast("This service is no longer assigned to you or is unavailable.");
 }
 
 async function refresh() {
@@ -539,6 +635,7 @@ $("#login-form").addEventListener("submit", async (event) => {
     }) });
     showApp(result.user);
     await refresh();
+    openNotificationTicket();
   } catch (error) { $("#login-error").textContent = error.message; }
 });
 
@@ -789,6 +886,7 @@ syncDialogViewport();
     const result = await api("/api/me");
     showApp(result.user);
     await refresh();
+    openNotificationTicket();
   } catch {
     showLogin();
   }

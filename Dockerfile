@@ -7,7 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DATABASE_PATH=/data/service.sqlite3
 
 WORKDIR /app
+COPY requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 COPY server.py ./server.py
+COPY push.py ./push.py
 COPY static ./static
 
 RUN useradd --system --uid 10001 --home-dir /app appuser \
