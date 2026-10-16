@@ -45,6 +45,8 @@ input[type=checkbox] { accent-color: #8ea3ff; }
 .button:disabled { opacity: .55; cursor: wait; }
 .notification-description { color: #a4adbb; font-size: 14px; line-height: 1.65; }
 .language-setting { margin: 8px 10px; font-size: 12px; }
+.notification-shortcut { align-self: center; color: #bcc8ff; }
+.notification-shortcut svg, .notification-icon { width: 22px; height: 22px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .address-field { min-width: 0; margin-bottom: 14px; }
 .address-field > label { margin-bottom: 8px; }
 .address-field > .field-hint { margin: 7px 0 0; line-height: 1.5; }

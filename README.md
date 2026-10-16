@@ -80,7 +80,7 @@ Lookups use the public [Photon](https://photon.komoot.io) service and [OpenStree
 
 ## Phone notifications
 
-Open the workspace menu, choose **Notifications**, and select **Enable notifications** on each device that should receive assignments. Use **Send test notification** to queue a test. Newly assigned or reassigned active services notify only the assigned technician's subscribed devices; ordinary edits do not send duplicate assignment alerts. Tapping an alert opens the service after authentication. Customer names, addresses, and phone numbers are deliberately omitted from lock-screen alerts.
+Tap the **bell button in the top bar**, or open the workspace menu and choose **Notifications** directly below Calendar, then select **Enable notifications** on each device that should receive assignments. Use **Send test notification** to queue a test. Newly assigned or reassigned active services notify only the assigned technician's subscribed devices; ordinary edits do not send duplicate assignment alerts. Tapping an alert opens the service after authentication. Customer names, addresses, and phone numbers are deliberately omitted from lock-screen alerts.
 
 On **iPhone/iPad (iOS/iPadOS 16.4+)**, open the HTTPS site in Safari, use **Share → Add to Home Screen**, then launch it from that icon and enable notifications inside the app. A normal Safari tab cannot receive iPhone web push. Android and supported desktop browsers can enable push from the site. Delivery depends on browser permission, connectivity, and device Focus/notification settings; it is not a guaranteed emergency alert system.
 

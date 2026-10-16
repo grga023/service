@@ -137,6 +137,7 @@ async function openNotificationSettings() {
 }
 
 $("#notifications-nav").addEventListener("click", openNotificationSettings);
+$("#notification-shortcut").addEventListener("click", openNotificationSettings);
 $("#enable-notifications").addEventListener("click", async () => {
   const button = $("#enable-notifications");
   button.disabled = true;

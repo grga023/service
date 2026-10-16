@@ -9,7 +9,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <title>FurnaceDesk — Service management</title>
-  <link rel="stylesheet" href="/styles.css?v=11">
+  <link rel="stylesheet" href="/styles.css?v=12">
 </head>
 <body>
   <main id="login-screen" class="login-screen">
@@ -36,9 +36,9 @@
       <button class="nav-item" data-view="done"><span class="nav-icon">✓</span> Done services</button>
       <button id="customers-nav" class="nav-item hidden" data-view="customers"><span class="nav-icon">◉</span> Customers</button>
       <button class="nav-item" data-view="calendar"><span class="nav-icon">▣</span> Calendar</button>
+      <button id="notifications-nav" class="nav-item"><svg class="notification-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span>Notifications</span></button>
       <div class="sidebar-bottom">
         <label class="language-setting">Language<select id="language"><option value="en">English</option><option value="sr-Latn">Srpski (latinica)</option></select></label>
-        <button id="notifications-nav" class="nav-item">Notifications</button>
         <a class="nav-item calendar-export" href="/calendar.ics"><span class="nav-icon">↓</span> Add to device calendar</a>
         <button id="users-nav" class="nav-item hidden"><span class="nav-icon">◉</span> Team members</button>
         <div class="user-block">
@@ -54,6 +54,7 @@
         <button id="menu-toggle" class="icon-button menu-toggle" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">☰</button>
         <div class="breadcrumbs">Workspace <span>/</span> <strong id="page-title">Service board</strong></div>
         <div class="top-actions">
+          <button id="notification-shortcut" class="icon-button notification-shortcut" type="button" aria-label="Notifications" title="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></button>
           <button id="sync-calendar" class="button button-quiet calendar-export" type="button" aria-label="Export device calendar">↓ <span>Sync calendar</span></button>
           <button id="new-ticket" class="button button-primary">＋ <span>New service</span></button>
         </div>
@@ -206,6 +207,6 @@
     </section>
   </div>
   <script src="/i18n.js?v=2" defer></script>
-  <script src="/app.js?v=12" defer></script>
+  <script src="/app.js?v=13" defer></script>
 </body>
 </html>
