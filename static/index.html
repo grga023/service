@@ -9,7 +9,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <title>FurnaceDesk — Service management</title>
-  <link rel="stylesheet" href="/styles.css?v=10">
+  <link rel="stylesheet" href="/styles.css?v=11">
 </head>
 <body>
   <main id="login-screen" class="login-screen">
@@ -125,7 +125,14 @@
         </label>
         <label>Customer name<input name="customer" maxlength="120" required placeholder="e.g. Alex Morgan"></label>
         <label>Phone number<input name="phone" type="tel" maxlength="40" required placeholder="+1 555 0100"></label>
-        <label class="span-two">Service address<input name="address" maxlength="240" required placeholder="Street, city, postal code"></label>
+        <div class="span-two address-field">
+          <label for="service-address">Service address</label>
+          <input id="service-address" name="address" maxlength="240" required placeholder="Street, city, postal code" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="address-suggestions" aria-describedby="address-hint address-status">
+          <div id="address-suggestions" class="address-suggestions hidden" role="listbox" aria-label="Address suggestions"></div>
+          <p id="address-status" class="field-hint" role="status"></p>
+          <p id="address-hint" class="field-hint">Banat, Serbia first. Try: mars tit 2c elem. Suggestions use Photon / OpenStreetMap; you can also type any address.</p>
+          <a class="address-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">Address data © OpenStreetMap contributors</a>
+        </div>
         <label>Boiler / stove model<input name="appliance_model" maxlength="120" required placeholder="e.g. Celtic, Alfa"></label>
         <label id="status-field">Service status<select name="status"><option value="received">Received</option><option value="in_progress">In progress</option><option value="problem">Problem / missing part</option></select></label>
         <label>Appointment start<input name="appointment_start" type="datetime-local"></label>
@@ -198,7 +205,7 @@
       <div class="modal-footer"><button id="disable-notifications" class="button button-quiet hidden" type="button">Disable on this device</button><button id="enable-notifications" class="button button-primary" type="button">Enable notifications</button></div>
     </section>
   </div>
-  <script src="/i18n.js?v=1" defer></script>
-  <script src="/app.js?v=10" defer></script>
+  <script src="/i18n.js?v=2" defer></script>
+  <script src="/app.js?v=11" defer></script>
 </body>
 </html>

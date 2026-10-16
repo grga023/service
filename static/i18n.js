@@ -225,6 +225,20 @@ const I18n = (() => {
     "{field} must be a valid amount.": "Unesite ispravan iznos za „{field}”.",
     "{field} must be a non-negative amount.": "Iznos za „{field}” mora biti od 0 do 100000000.",
     "FurnaceDesk — Service management": "FurnaceDesk — Upravljanje servisima",
+    "Address suggestions": "Predlozi adresa",
+    "Banat, Serbia first. Try: mars tit 2c elem. Suggestions use Photon / OpenStreetMap; you can also type any address.": "Prednost imaju adrese iz Banata, Srbija. Probajte: mars tit 2c elem. Predloge pružaju Photon / OpenStreetMap; adresu možete uneti i ručno.",
+    "Address data © OpenStreetMap contributors": "Podaci o adresama © OpenStreetMap saradnici",
+    "Address selected. You can still edit it.": "Adresa je izabrana. I dalje je možete izmeniti.",
+    "Searching addresses...": "Pretraga adresa...",
+    "Banat, Serbia": "Banat, Srbija",
+    "Serbia": "Srbija",
+    "House number from your entry; please check.": "Kućni broj je preuzet iz vašeg unosa; proverite ga.",
+    "Choose an address or keep typing.": "Izaberite adresu ili nastavite unos.",
+    "No matching streets found. Try a fuller street and town name, or enter the address manually.": "Nema pronađenih ulica. Unesite potpuniji naziv ulice i mesta ili unesite adresu ručno.",
+    "Address search is busy. Try again shortly or enter the address manually.": "Pretraga adresa je zauzeta. Pokušajte uskoro ili unesite adresu ručno.",
+    "Address suggestions are unavailable. You can enter the address manually.": "Predlozi adresa trenutno nisu dostupni. Adresu možete uneti ručno.",
+    "Enter between 3 and 200 characters for address search.": "Za pretragu adresa unesite između 3 i 200 znakova.",
+    "Enter a street and town to search.": "Za pretragu unesite ulicu i mesto.",
   };
   let language = "en";
   try { language = localStorage.getItem("furnacedesk-language") === "sr-Latn" ? "sr-Latn" : "en"; }

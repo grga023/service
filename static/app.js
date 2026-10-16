@@ -6,6 +6,10 @@ const state = {
 const mobileLayout = window.matchMedia("(max-width: 1024px)");
 let pushRegistration = null;
 let pushSettings = null;
+let addressTimer = null;
+let addressRequest = null;
+let addressMatches = [];
+let addressIndex = -1;
 const t = I18n.t;
 const statuses = [
   { key: "received", label: "Received" },
@@ -69,12 +73,14 @@ function showApp(user) {
 async function changeLanguage(event) {
   const language = event.currentTarget.value;
   const previous = I18n.language;
+  let saved = false;
   $$("#language, #login-language").forEach((select) => { select.disabled = true; });
   try {
     if (state.user) {
       const result = await api("/api/preferences", { method: "POST", body: JSON.stringify({ language }) });
       state.user = result.user;
     }
+    saved = true;
     I18n.set(language);
     if (state.user) {
       $("#user-role").textContent = roleName(state.user.roles);
@@ -84,7 +90,7 @@ async function changeLanguage(event) {
       showToast(t("Language saved."));
     }
   } catch (error) {
-    I18n.set(previous);
+    if (!saved) I18n.set(previous);
     showToast(error.message);
   } finally { $$("#language, #login-language").forEach((select) => { select.disabled = false; }); }
 }
@@ -450,6 +456,7 @@ function openModal(id) {
 }
 
 function closeModal(id) {
+  if (id === "ticket-modal") clearAddressSuggestions();
   $(`#${id}`).classList.add("hidden");
   if (id === "completion-modal") $("#ticket-modal").inert = false;
   $("#app").inert = $$(".modal:not(.hidden)").length > 0;
@@ -477,6 +484,7 @@ function syncDialogViewport() {
 }
 
 function openTicket(ticketId = null, appointment = "", customer = null) {
+  clearAddressSuggestions();
   const form = $("#ticket-form");
   form.reset();
   $("#ticket-error").textContent = "";
@@ -520,6 +528,93 @@ function openTicket(ticketId = null, appointment = "", customer = null) {
   $("#mark-done").textContent = t(ticket?.status === "done" ? "Edit completion costs" : "Mark service done");
   openModal("ticket-modal");
 }
+
+function clearAddressSuggestions() {
+  clearTimeout(addressTimer);
+  addressRequest?.abort();
+  addressRequest = null;
+  addressMatches = [];
+  addressIndex = -1;
+  $("#address-suggestions").innerHTML = "";
+  $("#address-suggestions").classList.add("hidden");
+  $("#service-address").setAttribute("aria-expanded", "false");
+  $("#service-address").removeAttribute("aria-activedescendant");
+  $("#address-status").textContent = "";
+}
+
+function selectAddress(index) {
+  const match = addressMatches[index];
+  if (!match) return;
+  $("#service-address").value = match.label;
+  clearAddressSuggestions();
+  $("#service-address").focus({ preventScroll: true });
+  $("#address-status").textContent = t("Address selected. You can still edit it.");
+}
+
+async function searchAddresses(query) {
+  const request = new AbortController();
+  addressRequest = request;
+  $("#address-status").textContent = t("Searching addresses...");
+  try {
+    const result = await api("/api/addresses/search", {
+      method: "POST", body: JSON.stringify({ query }), signal: request.signal,
+    });
+    if (request.signal.aborted || $("#service-address").value.trim() !== query ||
+        $("#ticket-modal").classList.contains("hidden")) return;
+    addressMatches = result.suggestions;
+    addressIndex = -1;
+    $("#address-suggestions").innerHTML = addressMatches.map((match, index) => `
+      <button type="button" class="address-suggestion" role="option" tabindex="-1" id="address-option-${index}" data-address-index="${index}" aria-selected="false">
+        <strong>${esc(match.label)}</strong><span>${esc(t(match.region))}${match.postcode ? ` · ${esc(match.postcode)}` : ""}${match.house_number && !match.house_number_verified ? ` · ${t("House number from your entry; please check.")}` : ""}</span>
+      </button>`).join("");
+    const hasMatches = addressMatches.length > 0;
+    $("#address-suggestions").classList.toggle("hidden", !hasMatches);
+    $("#service-address").setAttribute("aria-expanded", String(hasMatches));
+    $("#address-status").textContent = t(hasMatches ? "Choose an address or keep typing." :
+      "No matching streets found. Try a fuller street and town name, or enter the address manually.");
+    $$("[data-address-index]").forEach((button) => {
+      button.addEventListener("mousedown", (event) => event.preventDefault());
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        selectAddress(Number(button.dataset.addressIndex));
+      });
+    });
+  } catch (error) {
+    if (error.name !== "AbortError" && !request.signal.aborted) {
+      $("#address-status").textContent = t(error.message);
+    }
+  } finally {
+    if (addressRequest === request) addressRequest = null;
+  }
+}
+
+$("#service-address").addEventListener("input", (event) => {
+  clearAddressSuggestions();
+  const query = event.currentTarget.value.trim();
+  if (query.length >= 3 && query.length <= 200 && canManage()) {
+    addressTimer = setTimeout(() => searchAddresses(query), 700);
+  }
+});
+$("#service-address").addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    clearAddressSuggestions();
+  } else if ((event.key === "ArrowDown" || event.key === "ArrowUp") && addressMatches.length) {
+    event.preventDefault();
+    addressIndex = addressIndex < 0 ? (event.key === "ArrowDown" ? 0 : addressMatches.length - 1) :
+      (addressIndex + (event.key === "ArrowDown" ? 1 : -1) + addressMatches.length) % addressMatches.length;
+    $$(".address-suggestion").forEach((button, index) => button.setAttribute("aria-selected", String(index === addressIndex)));
+    $("#service-address").setAttribute("aria-activedescendant", `address-option-${addressIndex}`);
+    $(`#address-option-${addressIndex}`).scrollIntoView({ block: "nearest" });
+  } else if (event.key === "Enter" && addressIndex >= 0) {
+    event.preventDefault();
+    selectAddress(addressIndex);
+  }
+});
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".address-field")) clearAddressSuggestions();
+});
 
 function renderCustomerList() {
   if (!canManage()) return;

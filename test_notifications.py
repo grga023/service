@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 import push
 import server
+import addresses
 
 
 class NotificationApiTests(unittest.TestCase):
@@ -102,6 +103,21 @@ class NotificationApiTests(unittest.TestCase):
         self.assertEqual(self.request("/api/login", {
             "username": "admin", "password": "test-admin-password",
         })[1]["user"]["language"], "sr-Latn")
+
+    @patch("addresses.search")
+    def test_address_search_authorization_and_provider_failure(self, search):
+        self.assertEqual(self.request("/api/addresses/search", {"query": "mars tit elem"})[0], 401)
+        self.request("/api/login", {"username": "admin", "password": "test-admin-password"})
+        search.return_value = [{"label": "Maršala Tita, Elemir, 2C"}]
+        status, result = self.request("/api/addresses/search", {"query": "mars tit 2c elem"})
+        self.assertEqual(status, 200)
+        self.assertEqual(result["suggestions"][0]["label"], "Maršala Tita, Elemir, 2C")
+        search.side_effect = addresses.AddressUnavailable("Address suggestions are unavailable. You can enter the address manually.")
+        self.assertEqual(self.request("/api/addresses/search", {"query": "mars tit elem"})[0], 503)
+        self.request("/api/users", {"username": "tech", "password": "test-tech-password", "roles": ["technician"]})
+        self.request("/api/logout", {})
+        self.request("/api/login", {"username": "tech", "password": "test-tech-password"})
+        self.assertEqual(self.request("/api/addresses/search", {"query": "mars tit elem"})[0], 403)
 
 
 if __name__ == "__main__":

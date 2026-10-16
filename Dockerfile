@@ -11,6 +11,7 @@ COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY server.py ./server.py
 COPY push.py ./push.py
+COPY addresses.py ./addresses.py
 COPY static ./static
 
 RUN useradd --system --uid 10001 --home-dir /app appuser \

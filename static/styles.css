@@ -45,6 +45,16 @@ input[type=checkbox] { accent-color: #8ea3ff; }
 .button:disabled { opacity: .55; cursor: wait; }
 .notification-description { color: #a4adbb; font-size: 14px; line-height: 1.65; }
 .language-setting { margin: 8px 10px; font-size: 12px; }
+.address-field { min-width: 0; margin-bottom: 14px; }
+.address-field > label { margin-bottom: 8px; }
+.address-field > .field-hint { margin: 7px 0 0; line-height: 1.5; }
+.address-suggestions { display: grid; max-height: 260px; overflow-y: auto; margin-top: 7px; border: 1px solid #404b62; border-radius: 9px; background: #202633; }
+.address-suggestion { display: grid; gap: 5px; min-height: 54px; padding: 12px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.address-suggestion:last-child { border-bottom: 0; }
+.address-suggestion:hover, .address-suggestion[aria-selected="true"] { background: #303c56; }
+.address-suggestion strong { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.address-suggestion span { color: #a3adbe; font-size: 11px; line-height: 1.5; }
+.address-attribution { display: inline-block; margin-top: 7px; color: #9baad3; font-size: 10px; }
 .button-primary { border-color: #a9b8ff40; background: #8499f2; color: #101318; }
 .button-primary:hover { background: #a0b0ff; }
 .button-quiet { border-color: var(--border); background: transparent; color: #c5cad2; }
@@ -53,7 +63,7 @@ input[type=checkbox] { accent-color: #8ea3ff; }
 .icon-button:hover { background: var(--surface-3); color: var(--text); }
 .form-error { min-height: 17px; margin: 8px 0 0; color: var(--red); font-size: 12px; }
 .app-shell { min-height: 100vh; }
-.sidebar { position: fixed; inset: 0 auto 0 0; z-index: 5; display: flex; flex-direction: column; width: 232px; padding: 20px 14px 14px; border-right: 1px solid var(--border); background: #14171d; }
+.sidebar { position: fixed; inset: 0 auto 0 0; z-index: 5; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; width: 232px; padding: 20px 14px 14px; border-right: 1px solid var(--border); background: #14171d; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 2px 10px 31px; color: var(--text); font-size: 16px; font-weight: 720; letter-spacing: -.05em; text-decoration: none; }
 .brand .brand-mark { width: 29px; height: 29px; font-size: 16px; }
 .brand-light { color: var(--muted); font-weight: 480; }
@@ -62,7 +72,7 @@ input[type=checkbox] { accent-color: #8ea3ff; }
 .nav-item:hover { background: #20242c; color: var(--text); }
 .nav-item.active { background: #242a37; color: #bcc8ff; }
 .nav-icon { width: 18px; color: #8490a3; text-align: center; font-size: 15px; }
-.sidebar-bottom { display: grid; gap: 3px; margin-top: auto; }
+.sidebar-bottom { display: grid; flex-shrink: 0; gap: 3px; margin-top: auto; }
 .user-block { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 13px 4px 2px; border-top: 1px solid var(--border); }
 .avatar { display: grid; flex: 0 0 31px; place-items: center; width: 31px; height: 31px; border-radius: 50%; background: #313a50; color: #bdc9ff; font-size: 12px; font-weight: 700; }
 .user-meta { display: grid; flex: 1; min-width: 0; gap: 3px; }
@@ -267,6 +277,10 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   .icon-button { width: 44px; height: 44px; flex-shrink: 0; }
   .eyebrow { font-size: 10px; color: #9aa4b5; }
   .field-hint { font-size: 12px; line-height: 1.5; }
+  .address-field { margin-bottom: 22px; }
+  .address-suggestion { min-height: 64px; padding: 14px; }
+  .address-suggestion strong { font-size: 15px; }
+  .address-suggestion span, .address-attribution { font-size: 12px; }
   .optional { font-size: 12px; }
   .sidebar { z-index: 12; width: min(300px, calc(100vw - 44px)); padding-top: max(20px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-110%); transition: transform .2s ease; box-shadow: 12px 0 40px #0005; }
   .sidebar.open { transform: translateX(0); }

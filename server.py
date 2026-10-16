@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 import push
+import addresses
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
@@ -637,7 +638,11 @@ class ServiceHandler(BaseHTTPRequestHandler):
                 return
             try:
                 route_parts = path.strip("/").split("/")
-                if path == "/api/preferences":
+                if path == "/api/addresses/search":
+                    self.require_roles(user, "admin", "dispatcher")
+                    matches = addresses.search(data.get("query"))
+                    self.send_json({"suggestions": matches})
+                elif path == "/api/preferences":
                     language = data.get("language")
                     if language not in ("en", "sr-Latn"):
                         raise ValueError("Select English or Serbian (Latin).")
@@ -748,6 +753,8 @@ class ServiceHandler(BaseHTTPRequestHandler):
                     self.send_error_json(HTTPStatus.NOT_FOUND, "Not found.")
             except PermissionError as exc:
                 self.send_error_json(HTTPStatus.FORBIDDEN, str(exc))
+            except addresses.AddressUnavailable as exc:
+                self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
             except ValueError as exc:
                 self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 

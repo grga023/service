@@ -70,6 +70,12 @@ Phone forms fill the screen, with independently scrolling fields and fixed save/
 
 Use **Sync calendar** or **Add to device calendar** to download the authenticated `.ics` calendar. The file can be imported into Apple Calendar or Google Calendar on desktop and mobile. The calendar uses local appointment times; importing the file creates a snapshot, so export it again after schedule changes.
 
+### Address suggestions
+
+Start typing in **Service address** to see street/town suggestions, prioritized for **Banat, Serbia**. Short, unambiguous local town prefixes are expanded, Serbian Cyrillic map names are displayed in Latin script, and common shorthand such as `mars tit 2c elem` searches for **Maršala Tita, Elemir, 2C**. Select a result by touch/click or with the arrow keys and Enter. Selecting is optional: you can always type or edit the complete address manually. Existing saved addresses are not rewritten.
+
+Lookups use the public [Photon](https://photon.komoot.io) service and [OpenStreetMap](https://www.openstreetmap.org/copyright) data. Only the street/town search is sent to Photon; the extracted house number, customer name, phone number, and service record are not sent. Requests are debounced, rate-limited across the app, and cached in memory for up to 24 hours. The server needs outbound HTTPS to Photon. Availability and map coverage are not guaranteed; failures are shown inline and never block saving a manually entered address. A house number carried over from your input is explicitly marked for checking, not presented as a map-verified property.
+
 ## Phone notifications
 
 Open the workspace menu, choose **Notifications**, and select **Enable notifications** on each device that should receive assignments. Use **Send test notification** to queue a test. Newly assigned or reassigned active services notify only the assigned technician's subscribed devices; ordinary edits do not send duplicate assignment alerts. Tapping an alert opens the service after authentication. Customer names, addresses, and phone numbers are deliberately omitted from lock-screen alerts.
