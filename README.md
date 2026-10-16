@@ -38,6 +38,8 @@ The first account is an administrator. Use **Team members** to add accounts and 
 - **Call receiver / dispatcher** — creates and manages tickets, schedules visits, and assigns technicians.
 - **Service technician** — sees assigned tickets and can update their status, parts, and service notes.
 
+The app also creates an **ognjen** technician account on startup if that username does not exist, including for existing installations. Its generated initial password appears once in container logs; an administrator can set a new password in **Team members**. New services default to active technician **ognjen**; you can select another technician or explicitly choose **Unassigned**. Existing service assignments are preserved. Only active accounts with the **Service technician** role appear in the assignment list. Existing accounts named `ognjen` are not modified or reactivated automatically.
+
 New passwords must be at least 8 characters; use a long, unique password for an internet-facing installation. Deactivating an account prevents it from signing in.
 
 Reset an existing administrator password interactively (the password is not placed in shell history):

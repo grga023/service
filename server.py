@@ -172,6 +172,14 @@ def initialize():
                 print(f"Initial admin account: {username} / {password}", flush=True)
             else:
                 print(f"Initial admin account created for {username} (ADMIN_PASSWORD).", flush=True)
+        if not db.execute("SELECT 1 FROM users WHERE username='ognjen' COLLATE NOCASE").fetchone():
+            password = secrets.token_urlsafe(18)
+            salt, digest = hash_password(password)
+            db.execute(
+                "INSERT INTO users (username,salt,password_hash,roles,created_at) VALUES (?,?,?,?,?)",
+                ("ognjen", salt, digest, json.dumps(["technician"]), datetime.now(timezone.utc).isoformat()),
+            )
+            print(f"Initial technician account: ognjen / {password}", flush=True)
 
 
 def phone_key(phone):
@@ -716,7 +724,14 @@ class ServiceHandler(BaseHTTPRequestHandler):
                     self.end_headers()
                 elif path == "/api/tickets":
                     self.require_roles(user, "admin", "dispatcher")
-                    ticket = self.ticket_payload({**data, "status": "received"})
+                    ticket_data = {**data, "status": "received"}
+                    if "assignee_id" not in ticket_data:
+                        default_technician = db.execute(
+                            "SELECT id,roles FROM users WHERE username='ognjen' COLLATE NOCASE AND active=1",
+                        ).fetchone()
+                        if default_technician and "technician" in json.loads(default_technician["roles"]):
+                            ticket_data["assignee_id"] = default_technician["id"]
+                    ticket = self.ticket_payload(ticket_data)
                     if ticket["status"] == "done":
                         raise ValueError("Complete a service from its service record to enter the costs.")
                     self.ensure_technician(db, ticket["assignee_id"])

@@ -516,7 +516,11 @@ function openTicket(ticketId = null, appointment = "", customer = null) {
   updateEffortPreview();
   form.elements.assignee_id.innerHTML = `<option value="">${t("Unassigned")}</option>${state.technicians.map((person) =>
     `<option value="${person.id}">${esc(person.username)}</option>`).join("")}`;
-  if (ticket?.assignee_id) form.elements.assignee_id.value = ticket.assignee_id;
+  if (ticket) form.elements.assignee_id.value = ticket.assignee_id || "";
+  else {
+    const defaultTechnician = state.technicians.find((person) => person.username.toLowerCase() === "ognjen");
+    if (defaultTechnician) form.elements.assignee_id.value = defaultTechnician.id;
+  }
   const techLimited = hasRole("technician") && !canManage();
   for (const element of $$(".form-grid input, .form-grid select, .form-grid textarea", form)) {
     if (element.name === "id") continue;

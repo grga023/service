@@ -104,6 +104,29 @@ class NotificationApiTests(unittest.TestCase):
             "username": "admin", "password": "test-admin-password",
         })[1]["user"]["language"], "sr-Latn")
 
+    def test_default_technician_and_explicit_unassigned(self):
+        self.request("/api/login", {"username": "admin", "password": "test-admin-password"})
+        technicians = self.request("/api/technicians")[1]["users"]
+        ognjen = next(user for user in technicians if user["username"] == "ognjen")
+        self.assertEqual(ognjen["roles"], ["technician"])
+        payload = {"customer": "Test", "phone": "123456", "address": "Test street", "appliance_model": "Alfa"}
+        status, result = self.request("/api/tickets", payload)
+        self.assertEqual(status, 201)
+        self.assertEqual(result["ticket"]["assignee_id"], ognjen["id"])
+        ticket_id = result["ticket"]["id"]
+        self.assertEqual(self.request("/api/tickets", {**payload, "assignee_id": ""})[1]["ticket"]["assignee_id"], None)
+        self.assertEqual(self.request(f"/api/tickets/{ticket_id}", {"notes": "edit"}, "PUT")[1]["ticket"]["assignee_id"], ognjen["id"])
+        with server.connect() as db:
+            before = db.execute("SELECT password_hash FROM users WHERE id=?", (ognjen["id"],)).fetchone()[0]
+        server.initialize()
+        with server.connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM users WHERE username='ognjen'").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT password_hash FROM users WHERE id=?", (ognjen["id"],)).fetchone()[0], before)
+        self.request(f"/api/users/{ognjen['id']}", {"active": False}, "PUT")
+        self.assertIsNone(self.request("/api/tickets", payload)[1]["ticket"]["assignee_id"])
+        server.initialize()
+        self.assertFalse(any(user["username"] == "ognjen" for user in self.request("/api/technicians")[1]["users"]))
+
     @patch("addresses.search")
     def test_address_search_authorization_and_provider_failure(self, search):
         self.assertEqual(self.request("/api/addresses/search", {"query": "mars tit elem"})[0], 401)
