@@ -1,6 +1,6 @@
 # FurnaceDesk
 
-A lightweight, mobile-friendly service desk for gas boiler and stove repair teams. It includes a Kanban board, customer and appliance records, parts tracking, appointment scheduling, role-based accounts, and an Apple/Google-compatible `.ics` calendar export.
+A lightweight, mobile-friendly service desk for gas boiler and stove repair teams. It includes a Kanban board, customer and appliance records, parts tracking, appointment scheduling, role-based accounts, and a subscribable Apple/Google calendar feed.
 
 ## Run with Docker
 
@@ -64,13 +64,23 @@ Every saved service creates or updates a customer profile, matched by phone numb
 
 ### Using a phone
 
-The phone layout uses bottom navigation for **Board**, **Calendar**, **Done**, and **Customers** (for administrators and dispatchers). Team management, calendar export, and sign-out are in the top-left menu.
+The phone layout uses bottom navigation for **Board**, **Calendar**, **Done**, and **Customers** (for administrators and dispatchers). Team management, calendar sync, and sign-out are in the top-left menu.
 
 On the board, choose a status tab to see full-width cards without sideways scrolling. Tap a card to edit or complete it, use **Call customer** to dial, or use **Move to** to change its status. Desktop drag-and-drop remains available. On the calendar, tap a date to see its visits below the month, then use **Schedule** to add a service on that day. Customer profiles open separately from the list; **All customers** returns to search.
 
 Phone forms fill the screen, with independently scrolling fields and fixed save/cancel controls. Needed part names and quantities stay inline; completion parts use labeled fields for quantity, customer unit price, and discounted unit cost. Inputs are sized to avoid automatic iPhone text zoom, and navigation and form actions account for device safe areas.
 
-Use **Sync calendar** or **Add to device calendar** to download the authenticated `.ics` calendar. The file can be imported into Apple Calendar or Google Calendar on desktop and mobile. The calendar uses local appointment times; importing the file creates a snapshot, so export it again after schedule changes.
+Use **Sync calendar** in the top bar, or **Add to device calendar** in the menu, to open **Calendar sync**. Three options are offered:
+
+- **Subscribe on iPhone or Mac** opens a `webcal://` link that Apple Calendar subscribes to. Your scheduled visits then refresh automatically, with no repeated exports.
+- **Add to Google Calendar** adds the same feed as a Google Calendar subscription, which also syncs to Android.
+- **Download one-time file** saves or shares a `.ics` snapshot that does not update later. Use it only when a subscription is not possible.
+
+Subscription is the recommended option. A one-time download cannot be started from an installed iPhone Home Screen app, which is why the dialog offers the subscription link first; the download button uses the iOS share sheet when one is available.
+
+Each account has its own private calendar link containing a random token, shown in the dialog with a **Copy** button. Technicians see only their own assigned visits; administrators and dispatchers see all scheduled visits. Completed services are removed from the feed. Calendar apps fetch the feed without signing in, so treat the link as a secret: anyone holding it can read those scheduled visits. **Reset link** immediately revokes the old link; every subscribed device must then subscribe again. Deactivating an account also disables its link.
+
+The feed uses local appointment times, requests a 30-minute refresh interval, and always sets an event end time, falling back to the estimated effort or one hour. Calendar providers choose their own refresh frequency, so updates may not appear instantly.
 
 ### Address suggestions
 

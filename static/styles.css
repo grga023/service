@@ -44,6 +44,13 @@ input[type=checkbox] { accent-color: #8ea3ff; }
 .button:hover { background: #303642; }
 .button:disabled { opacity: .55; cursor: wait; }
 .notification-description { color: #a4adbb; font-size: 14px; line-height: 1.65; }
+.calendar-actions { display: grid; gap: 10px; margin: 16px 0; }
+.calendar-actions .button { justify-content: center; min-height: 48px; text-decoration: none; }
+.calendar-actions .disabled-link { pointer-events: none; opacity: .5; }
+.calendar-link-label { display: grid; gap: 8px; margin-bottom: 14px; color: #a4adbb; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+.calendar-link-row { display: flex; gap: 8px; align-items: stretch; }
+.calendar-link-field { flex: 1; min-width: 0; padding: 12px; border: 1px solid #404b62; border-radius: 9px; background: #202633; color: var(--text); font-size: 13px; text-transform: none; letter-spacing: 0; }
+.calendar-link-row .button { flex-shrink: 0; min-height: 44px; }
 .language-setting { margin: 8px 10px; font-size: 12px; }
 .notification-shortcut { align-self: center; color: #bcc8ff; }
 .notification-shortcut svg, .notification-icon { width: 22px; height: 22px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }

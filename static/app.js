@@ -181,6 +181,94 @@ $("#test-notification").addEventListener("click", async () => {
   finally { button.disabled = false; }
 });
 
+let calendarToken = null;
+
+function calendarFeedUrl(token) {
+  return `${window.location.host}/calendar/${encodeURIComponent(token)}.ics`;
+}
+
+function renderCalendarLinks(token) {
+  calendarToken = token;
+  const feed = calendarFeedUrl(token);
+  const webcal = `webcal://${feed}`;
+  $("#calendar-link").value = `${window.location.protocol}//${feed}`;
+  $("#calendar-subscribe").href = webcal;
+  $("#calendar-google").href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
+}
+
+async function openCalendarSync() {
+  setMenuOpen(false);
+  if ($("#calendar-modal").classList.contains("hidden")) openModal("calendar-modal");
+  $("#calendar-sync-error").textContent = "";
+  $("#calendar-sync-status").textContent = "";
+  $$("#calendar-subscribe, #calendar-google").forEach((link) => link.classList.add("disabled-link"));
+  try {
+    const { token } = await api("/api/calendar-link");
+    renderCalendarLinks(token);
+    $$("#calendar-subscribe, #calendar-google").forEach((link) => link.classList.remove("disabled-link"));
+  } catch (error) { $("#calendar-sync-error").textContent = error.message; }
+}
+
+async function downloadCalendarFile() {
+  const button = $("#calendar-download");
+  button.disabled = true;
+  $("#calendar-sync-error").textContent = "";
+  $("#calendar-sync-status").textContent = "";
+  try {
+    const response = await fetch("/calendar.ics?download=1", { credentials: "same-origin" });
+    if (response.status === 401) { showLogin(); return; }
+    if (!response.ok) throw new Error(t("The calendar file could not be created. Try again."));
+    const text = await response.text();
+    const name = "furnacedesk-calendar.ics";
+    const file = new File([text], name, { type: "text/calendar" });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "FurnaceDesk" });
+        return;
+      } catch (error) { if (error.name === "AbortError") return; }
+    }
+    const url = URL.createObjectURL(new Blob([text], { type: "text/calendar" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    $("#calendar-sync-status").textContent = t("File created. Open it to add the visits to your calendar.");
+  } catch (error) { $("#calendar-sync-error").textContent = error.message; }
+  finally { button.disabled = false; }
+}
+
+$("#calendar-nav").addEventListener("click", openCalendarSync);
+$("#sync-calendar").addEventListener("click", openCalendarSync);
+$("#calendar-download").addEventListener("click", downloadCalendarFile);
+$("#calendar-copy").addEventListener("click", async () => {
+  const field = $("#calendar-link");
+  if (!field.value) return;
+  $("#calendar-sync-error").textContent = "";
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(field.value);
+    else { field.select(); document.execCommand("copy"); }
+    $("#calendar-sync-status").textContent = t("Link copied.");
+  } catch {
+    field.select();
+    $("#calendar-sync-status").textContent = t("Copy the selected link manually.");
+  }
+});
+$("#calendar-reset").addEventListener("click", async () => {
+  const button = $("#calendar-reset");
+  button.disabled = true;
+  $("#calendar-sync-error").textContent = "";
+  try {
+    const { token } = await api("/api/calendar-link/reset", { method: "POST", body: "{}" });
+    renderCalendarLinks(token);
+    $("#calendar-sync-status").textContent = t("New link created. Subscribe again on every device; the old link stopped working.");
+  } catch (error) { $("#calendar-sync-error").textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
 function openNotificationTicket() {
   const url = new URL(window.location.href);
   const ticketId = Number(url.searchParams.get("ticket"));
@@ -982,7 +1070,6 @@ $("#menu-close").addEventListener("click", () => setMenuOpen(false));
 $("#sidebar-backdrop").addEventListener("click", () => setMenuOpen(false));
 $$("[data-view]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
 $$("[data-close]").forEach((button) => button.addEventListener("click", () => closeModal(button.dataset.close)));
-$("#sync-calendar")?.addEventListener("click", () => { window.location.href = "/calendar.ics"; });
 document.addEventListener("keydown", (event) => {
   const modals = $$(".modal:not(.hidden)");
   const modal = modals.at(-1);

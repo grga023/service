@@ -9,7 +9,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <title>FurnaceDesk — Service management</title>
-  <link rel="stylesheet" href="/styles.css?v=12">
+  <link rel="stylesheet" href="/styles.css?v=13">
 </head>
 <body>
   <main id="login-screen" class="login-screen">
@@ -39,7 +39,7 @@
       <button id="notifications-nav" class="nav-item"><svg class="notification-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span>Notifications</span></button>
       <div class="sidebar-bottom">
         <label class="language-setting">Language<select id="language"><option value="en">English</option><option value="sr-Latn">Srpski (latinica)</option></select></label>
-        <a class="nav-item calendar-export" href="/calendar.ics"><span class="nav-icon">↓</span> Add to device calendar</a>
+        <button id="calendar-nav" class="nav-item calendar-export"><span class="nav-icon">↓</span> Add to device calendar</button>
         <button id="users-nav" class="nav-item hidden"><span class="nav-icon">◉</span> Team members</button>
         <div class="user-block">
           <div id="user-avatar" class="avatar">U</div>
@@ -206,7 +206,32 @@
       <div class="modal-footer"><button id="disable-notifications" class="button button-quiet hidden" type="button">Disable on this device</button><button id="enable-notifications" class="button button-primary" type="button">Enable notifications</button></div>
     </section>
   </div>
-  <script src="/i18n.js?v=2" defer></script>
-  <script src="/app.js?v=13" defer></script>
+  <div id="calendar-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="calendar-sync-title">
+    <div class="modal-backdrop" data-close="calendar-modal"></div>
+    <section class="modal-card">
+      <div class="modal-header"><div><p class="eyebrow">DEVICE CALENDAR</p><h2 id="calendar-sync-title">Calendar sync</h2></div><button type="button" class="icon-button" data-close="calendar-modal" aria-label="Close">×</button></div>
+      <div class="modal-body">
+        <p class="notification-description">Subscribe once and your scheduled visits keep updating on your phone. A downloaded file is only a one-time copy.</p>
+        <div class="calendar-actions">
+          <a id="calendar-subscribe" class="button button-primary" href="#">Subscribe on iPhone or Mac</a>
+          <a id="calendar-google" class="button button-quiet" href="#" target="_blank" rel="noopener">Add to Google Calendar</a>
+          <button id="calendar-download" class="button button-quiet" type="button">Download one-time file</button>
+        </div>
+        <label class="calendar-link-label">Private calendar link
+          <span class="calendar-link-row">
+            <input id="calendar-link" class="calendar-link-field" type="text" readonly aria-label="Private calendar link">
+            <button id="calendar-copy" class="button button-quiet" type="button">Copy</button>
+          </span>
+        </label>
+        <p class="notification-description">On iPhone: tap Subscribe, then confirm in the Calendar app. On Android or desktop: use Add to Google Calendar, or paste the link into your calendar app as a subscription.</p>
+        <p class="notification-description">Keep this link private. Anyone who has it can read your scheduled visits.</p>
+        <p id="calendar-sync-status" class="notification-description" role="status"></p>
+        <p id="calendar-sync-error" class="form-error" role="alert"></p>
+      </div>
+      <div class="modal-footer"><button id="calendar-reset" class="button button-quiet" type="button">Reset link</button><button type="button" class="button button-primary" data-close="calendar-modal">Done</button></div>
+    </section>
+  </div>
+  <script src="/i18n.js?v=3" defer></script>
+  <script src="/app.js?v=14" defer></script>
 </body>
 </html>

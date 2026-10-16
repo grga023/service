@@ -15,7 +15,7 @@ from http import HTTPStatus
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 import push
 import addresses
 
@@ -27,6 +27,29 @@ SESSION_EXPIRY = datetime.max.replace(tzinfo=timezone.utc).isoformat()
 ROLES = {"admin", "dispatcher", "technician"}
 STATUSES = {"received", "in_progress", "done", "problem"}
 PBKDF2_ITERATIONS = 310_000
+CALENDAR_FEED_RE = re.compile(r"^/calendar/([A-Za-z0-9_-]{20,64})\.ics$")
+
+
+def new_calendar_token():
+    return secrets.token_urlsafe(24)
+
+
+def ics_escape(value):
+    return str(value or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r", "").replace("\n", "\\n")
+
+
+def ics_fold(line):
+    """Wrap a content line to 75 octets as RFC 5545 requires; Apple Calendar rejects longer lines."""
+    if len(line.encode("utf-8")) <= 73:
+        return line
+    pieces, current, limit = [], "", 73
+    for char in line:
+        if len(current.encode("utf-8")) + len(char.encode("utf-8")) > limit:
+            pieces.append(current)
+            current, limit = "", 72
+        current += char
+    pieces.append(current)
+    return "\r\n ".join(pieces)
 
 
 def connect():
@@ -103,8 +126,12 @@ def initialize():
             CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
         """)
         ticket_columns = {row["name"] for row in db.execute("PRAGMA table_info(tickets)")}
-        if "language" not in {row["name"] for row in db.execute("PRAGMA table_info(users)")}:
+        user_columns = {row["name"] for row in db.execute("PRAGMA table_info(users)")}
+        if "language" not in user_columns:
             db.execute("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT 'en'")
+        if "calendar_token" not in user_columns:
+            db.execute("ALTER TABLE users ADD COLUMN calendar_token TEXT")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_calendar_token ON users(calendar_token)")
         if "customer_id" not in ticket_columns:
             db.execute("ALTER TABLE tickets ADD COLUMN customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL")
         if "parts_json" not in ticket_columns:
@@ -192,6 +219,8 @@ def initialize():
                            (json.dumps(sorted(roles | {"technician"})), ognjen["id"]))
                 print("Added technician role to existing ognjen account; other roles and password preserved.", flush=True)
             db.execute("INSERT INTO app_migrations (name) VALUES (?)", (migration,))
+        for row in db.execute("SELECT id FROM users WHERE calendar_token IS NULL OR calendar_token=''").fetchall():
+            db.execute("UPDATE users SET calendar_token=? WHERE id=?", (new_calendar_token(), row["id"]))
 
 
 def phone_key(phone):
@@ -496,7 +525,8 @@ class ServiceHandler(BaseHTTPRequestHandler):
                 raise ValueError("Assigned user must be an active technician.")
 
     def do_GET(self):
-        path = unquote(urlparse(self.path).path)
+        parsed = urlparse(self.path)
+        path = unquote(parsed.path)
         if path == "/":
             self.serve_static("index.html")
             return
@@ -508,18 +538,28 @@ class ServiceHandler(BaseHTTPRequestHandler):
             self.send_json({"status": "ok"})
             return
         with connect() as db:
+            feed = CALENDAR_FEED_RE.match(path)
+            if feed:
+                owner = db.execute("SELECT * FROM users WHERE calendar_token=? AND active=1", (feed.group(1),)).fetchone()
+                if not owner:
+                    self.send_error_json(HTTPStatus.NOT_FOUND, "This calendar link is no longer valid.")
+                    return
+                self.send_calendar(db, owner)
+                return
             user = self.current_user(db)
             if path == "/calendar.ics":
                 if not user:
                     self.send_error_json(HTTPStatus.UNAUTHORIZED, "Sign in to download the calendar.")
                     return
-                self.send_calendar(db, user)
+                self.send_calendar(db, user, download=parse_qs(parsed.query).get("download") == ["1"])
                 return
             if not user:
                 self.send_error_json(HTTPStatus.UNAUTHORIZED, "Please sign in.")
                 return
             if path == "/api/me":
                 self.send_json({"user": public_user(user)})
+            elif path == "/api/calendar-link":
+                self.send_json({"token": self.calendar_token(db, user)})
             elif path == "/api/push":
                 session_hash = hashlib.sha256(self.session_token().encode()).hexdigest()
                 self.send_json({
@@ -662,6 +702,11 @@ class ServiceHandler(BaseHTTPRequestHandler):
                     self.require_roles(user, "admin", "dispatcher")
                     matches = addresses.search(data.get("query"))
                     self.send_json({"suggestions": matches})
+                elif path == "/api/calendar-link/reset":
+                    token = new_calendar_token()
+                    db.execute("UPDATE users SET calendar_token=? WHERE id=?", (token, user["id"]))
+                    db.commit()
+                    self.send_json({"token": token})
                 elif path == "/api/preferences":
                     language = data.get("language")
                     if language not in ("en", "sr-Latn"):
@@ -887,7 +932,16 @@ class ServiceHandler(BaseHTTPRequestHandler):
         cookie.load(self.headers.get("Cookie", ""))
         return cookie["session"].value
 
-    def send_calendar(self, db, user):
+    def calendar_token(self, db, user):
+        token = user["calendar_token"]
+        if token:
+            return token
+        token = new_calendar_token()
+        db.execute("UPDATE users SET calendar_token=? WHERE id=?", (token, user["id"]))
+        db.commit()
+        return token
+
+    def send_calendar(self, db, user, download=False):
         roles = set(json.loads(user["roles"]))
         if roles.isdisjoint({"admin", "dispatcher"}):
             rows = db.execute(
@@ -896,29 +950,55 @@ class ServiceHandler(BaseHTTPRequestHandler):
             )
         else:
             rows = db.execute("SELECT * FROM tickets WHERE appointment_start!='' AND status!='done' ORDER BY appointment_start")
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         events = []
         for row in rows:
-            start = datetime.fromisoformat(row["appointment_start"]).strftime("%Y%m%dT%H%M%S")
-            end_value = row["appointment_end"]
-            end = datetime.fromisoformat(end_value).strftime("%Y%m%dT%H%M%S") if end_value else ""
-            def escape(value):
-                return str(value or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+            try:
+                start_at = datetime.fromisoformat(row["appointment_start"])
+            except ValueError:
+                continue
+            end_at = None
+            if row["appointment_end"]:
+                try:
+                    end_at = datetime.fromisoformat(row["appointment_end"])
+                except ValueError:
+                    end_at = None
+            if end_at is None or end_at <= start_at:
+                hours = row["estimated_hours"] if row["estimated_hours"] and row["estimated_hours"] > 0 else 1
+                end_at = start_at + timedelta(hours=min(float(hours), 24 * 14))
+            description = f"Phone: {row['phone']}"
+            if row["notes"]:
+                description += "\n" + row["notes"]
             events.extend([
                 "BEGIN:VEVENT",
                 f"UID:service-{row['id']}@furnacedesk",
-                f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
-                f"DTSTART:{start}",
-                *([f"DTEND:{end}"] if end else []),
-                f"SUMMARY:{escape(row['appliance_model'])} service - {escape(row['customer'])}",
-                f"LOCATION:{escape(row['address'])}",
-                f"DESCRIPTION:{escape('Phone: ' + row['phone'] + chr(10) + row['notes'])}",
+                f"DTSTAMP:{stamp}",
+                f"DTSTART:{start_at.strftime('%Y%m%dT%H%M%S')}",
+                f"DTEND:{end_at.strftime('%Y%m%dT%H%M%S')}",
+                f"SUMMARY:{ics_escape(row['appliance_model'])} service - {ics_escape(row['customer'])}",
+                f"LOCATION:{ics_escape(row['address'])}",
+                f"DESCRIPTION:{ics_escape(description)}",
                 "END:VEVENT",
             ])
-        body = ("\r\n".join(["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//FurnaceDesk//Service Calendar//EN",
-                             "CALSCALE:GREGORIAN", *events, "END:VCALENDAR", ""]).encode("utf-8"))
+        lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//FurnaceDesk//Service Calendar//EN",
+            "CALSCALE:GREGORIAN",
+            "METHOD:PUBLISH",
+            "X-WR-CALNAME:FurnaceDesk",
+            "X-WR-CALDESC:Scheduled furnace and boiler services",
+            "X-WR-TIMEZONE:Europe/Belgrade",
+            "REFRESH-INTERVAL;VALUE=DURATION:PT30M",
+            "X-PUBLISHED-TTL:PT30M",
+            *events,
+            "END:VCALENDAR",
+        ]
+        body = ("\r\n".join(ics_fold(line) for line in lines) + "\r\n").encode("utf-8")
+        disposition = "attachment" if download else "inline"
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/calendar; charset=utf-8")
-        self.send_header("Content-Disposition", 'attachment; filename="furnacedesk-calendar.ics"')
+        self.send_header("Content-Disposition", f'{disposition}; filename="furnacedesk-calendar.ics"')
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
