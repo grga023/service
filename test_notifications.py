@@ -127,6 +127,29 @@ class NotificationApiTests(unittest.TestCase):
         server.initialize()
         self.assertFalse(any(user["username"] == "ognjen" for user in self.request("/api/technicians")[1]["users"]))
 
+    def test_existing_ognjen_gets_technician_role_once(self):
+        with server.connect() as db:
+            db.execute("DELETE FROM app_migrations WHERE name='ognjen-technician-role'")
+            db.execute("UPDATE users SET username='OgNjEn',roles=? WHERE username='ognjen'",
+                       (json.dumps(["admin", "dispatcher"]),))
+            before = dict(db.execute("SELECT * FROM users WHERE username='OgNjEn'").fetchone())
+        server.initialize()
+        self.request("/api/login", {"username": "admin", "password": "test-admin-password"})
+        technicians = self.request("/api/technicians")[1]["users"]
+        ognjen = next(user for user in technicians if user["id"] == before["id"])
+        self.assertEqual(set(ognjen["roles"]), {"admin", "dispatcher", "technician"})
+        with server.connect() as db:
+            after = dict(db.execute("SELECT * FROM users WHERE id=?", (before["id"],)).fetchone())
+            for field in ("username", "salt", "password_hash", "active"):
+                self.assertEqual(before[field], after[field])
+            db.execute("UPDATE users SET roles=?,active=0 WHERE id=?",
+                       (json.dumps(["admin", "dispatcher"]), before["id"]))
+        server.initialize()
+        with server.connect() as db:
+            after = db.execute("SELECT roles,active FROM users WHERE id=?", (before["id"],)).fetchone()
+            self.assertEqual(json.loads(after["roles"]), ["admin", "dispatcher"])
+            self.assertEqual(after["active"], 0)
+
     @patch("addresses.search")
     def test_address_search_authorization_and_provider_failure(self, search):
         self.assertEqual(self.request("/api/addresses/search", {"query": "mars tit elem"})[0], 401)

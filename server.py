@@ -180,6 +180,18 @@ def initialize():
                 ("ognjen", salt, digest, json.dumps(["technician"]), datetime.now(timezone.utc).isoformat()),
             )
             print(f"Initial technician account: ognjen / {password}", flush=True)
+        db.execute("CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY)")
+        migration = "ognjen-technician-role"
+        if not db.execute("SELECT 1 FROM app_migrations WHERE name=?", (migration,)).fetchone():
+            ognjen = db.execute(
+                "SELECT id,roles FROM users WHERE username='ognjen' COLLATE NOCASE",
+            ).fetchone()
+            roles = set(json.loads(ognjen["roles"]))
+            if "technician" not in roles:
+                db.execute("UPDATE users SET roles=? WHERE id=?",
+                           (json.dumps(sorted(roles | {"technician"})), ognjen["id"]))
+                print("Added technician role to existing ognjen account; other roles and password preserved.", flush=True)
+            db.execute("INSERT INTO app_migrations (name) VALUES (?)", (migration,))
 
 
 def phone_key(phone):
