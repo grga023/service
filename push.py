@@ -6,7 +6,7 @@ import sqlite3
 import threading
 import time
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -46,6 +46,11 @@ def initialize(db, database_path):
             payload TEXT NOT NULL,
             attempts INTEGER NOT NULL DEFAULT 0,
             available_at REAL NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS push_reminders (
+            ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+            appointment_start TEXT NOT NULL,
+            PRIMARY KEY (ticket_id,appointment_start)
         );
     """)
     key_path = Path(database_path).parent / "push-private.pem"
@@ -145,10 +150,51 @@ def enqueue_test(db, subscription_id):
     ))
 
 
+def queue_appointment_reminders(db, now=None):
+    now = now or datetime.now()
+    rows = db.execute("""
+        SELECT t.id,t.appointment_start,t.assignee_id,u.language
+        FROM tickets t JOIN users u ON u.id=t.assignee_id
+        WHERE t.appointment_start!='' AND t.status!='done' AND u.active=1
+          AND EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.user_id=t.assignee_id)
+    """).fetchall()
+    for ticket in rows:
+        try:
+            start = datetime.fromisoformat(ticket["appointment_start"])
+        except ValueError:
+            continue
+        if start.tzinfo is not None or not (now < start <= now + timedelta(minutes=30)):
+            continue
+        subscriptions = db.execute(
+            "SELECT id FROM push_subscriptions WHERE user_id=?", (ticket["assignee_id"],)
+        ).fetchall()
+        inserted = db.execute(
+            "INSERT OR IGNORE INTO push_reminders (ticket_id,appointment_start) VALUES (?,?)",
+            (ticket["id"], ticket["appointment_start"]),
+        )
+        if not inserted.rowcount:
+            continue
+        minutes = max(1, int((start - now).total_seconds() + 59) // 60)
+        serbian = ticket["language"] == "sr-Latn"
+        payload = json.dumps({
+            "title": "Predstojeći servis" if serbian else "Upcoming service",
+            "body": f"Servis #{ticket['id']} počinje za {minutes} min. Dodirnite za detalje." if serbian else
+                f"Service #{ticket['id']} starts in {minutes} minutes. Tap to view it.",
+            "ticket_id": ticket["id"],
+            "tag": f"reminder-{ticket['id']}-{ticket['appointment_start']}",
+            "reminder_start": ticket["appointment_start"],
+        })
+        db.executemany(
+            "INSERT INTO push_jobs (subscription_id,ticket_id,payload) VALUES (?,?,?)",
+            [(subscription["id"], ticket["id"], payload) for subscription in subscriptions],
+        )
+
+
 def deliver_one(database_path, key_path):
     with closing(sqlite3.connect(database_path, timeout=10)) as db:
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys = ON")
+        queue_appointment_reminders(db)
         job = db.execute("""
             SELECT j.*,s.subscription_json,s.user_id,s.session_hash
             FROM push_jobs j JOIN push_subscriptions s ON s.id=j.subscription_id
@@ -161,10 +207,23 @@ def deliver_one(database_path, key_path):
             WHERE u.id=? AND s.token_hash=? AND s.expires_at>?
         """, (job["user_id"], job["session_hash"],
               datetime.now(timezone.utc).isoformat())).fetchone()
-        ticket = db.execute("SELECT assignee_id,status FROM tickets WHERE id=?", (job["ticket_id"],)).fetchone() if job["ticket_id"] else None
+        ticket = db.execute(
+            "SELECT assignee_id,status,appointment_start FROM tickets WHERE id=?", (job["ticket_id"],)
+        ).fetchone() if job["ticket_id"] else None
+        payload = json.loads(job["payload"])
+        reminder_start = payload.get("reminder_start")
+        stale_reminder = False
+        if reminder_start:
+            try:
+                stale_reminder = (
+                    not ticket or ticket["appointment_start"] != reminder_start or
+                    datetime.fromisoformat(reminder_start) <= datetime.now()
+                )
+            except ValueError:
+                stale_reminder = True
         if not recipient or not recipient["active"] or (job["ticket_id"] and (
             not ticket or ticket["assignee_id"] != job["user_id"] or ticket["status"] == "done"
-        )):
+        )) or stale_reminder:
             db.execute("DELETE FROM push_jobs WHERE id=?", (job["id"],))
             db.commit()
             return True

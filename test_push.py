@@ -3,6 +3,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -24,10 +25,12 @@ class PushTests(unittest.TestCase):
             PRAGMA foreign_keys=ON;
             CREATE TABLE users (id INTEGER PRIMARY KEY,active INTEGER,language TEXT DEFAULT 'en');
             CREATE TABLE sessions (token_hash TEXT PRIMARY KEY,user_id INTEGER,expires_at TEXT);
-            CREATE TABLE tickets (id INTEGER PRIMARY KEY,assignee_id INTEGER,status TEXT);
+            CREATE TABLE tickets (
+                id INTEGER PRIMARY KEY,assignee_id INTEGER,status TEXT,appointment_start TEXT DEFAULT ''
+            );
             INSERT INTO users (id,active) VALUES (1,1),(2,1);
             INSERT INTO sessions VALUES ('session1',1,'9999'),('session2',2,'9999');
-            INSERT INTO tickets VALUES (1,1,'received');
+            INSERT INTO tickets VALUES (1,1,'received','');
         """)
         self.key_path = push.initialize(self.db, self.path)
         self.db.execute("""
@@ -74,6 +77,45 @@ class PushTests(unittest.TestCase):
         push.enqueue_test(self.db, 1)
         payload = json.loads(self.db.execute("SELECT payload FROM push_jobs ORDER BY id DESC").fetchone()[0])
         self.assertEqual(payload["title"], "FurnaceDesk obaveštenja")
+
+    def test_appointment_reminders_are_queued_once_for_the_assignee(self):
+        appointment = "2031-04-07T09:30"
+        now = datetime(2031, 4, 7, 9, 0)
+        self.db.execute("UPDATE tickets SET appointment_start=? WHERE id=1", (appointment,))
+        push.queue_appointment_reminders(self.db, now)
+        push.queue_appointment_reminders(self.db, now)
+        jobs = self.db.execute("SELECT * FROM push_jobs").fetchall()
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0]["subscription_id"], 1)
+        payload = json.loads(jobs[0]["payload"])
+        self.assertEqual(payload["title"], "Upcoming service")
+        self.assertEqual(payload["body"], "Service #1 starts in 30 minutes. Tap to view it.")
+        self.assertEqual(payload["reminder_start"], appointment)
+        self.assertNotIn("address", payload)
+
+    def test_reminders_skip_unassigned_done_and_appointments_outside_the_window(self):
+        now = datetime(2031, 4, 7, 9, 0)
+        self.db.execute("UPDATE tickets SET appointment_start='2031-04-07T09:31' WHERE id=1")
+        push.queue_appointment_reminders(self.db, now)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM push_jobs").fetchone()[0], 0)
+        self.db.execute("UPDATE tickets SET appointment_start='2031-04-07T09:30',assignee_id=NULL WHERE id=1")
+        push.queue_appointment_reminders(self.db, now)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM push_jobs").fetchone()[0], 0)
+        self.db.execute("UPDATE tickets SET assignee_id=1,status='done' WHERE id=1")
+        push.queue_appointment_reminders(self.db, now)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM push_jobs").fetchone()[0], 0)
+
+    @patch("push.webpush")
+    def test_stale_appointment_reminder_is_discarded(self, send):
+        appointment = "2031-04-07T09:30"
+        self.db.execute("UPDATE tickets SET appointment_start=? WHERE id=1", (appointment,))
+        self.db.execute("INSERT INTO push_jobs (subscription_id,ticket_id,payload) VALUES (1,1,?)", (
+            json.dumps({"ticket_id": 1, "reminder_start": appointment}),))
+        self.db.execute("UPDATE tickets SET appointment_start='2031-04-07T10:00' WHERE id=1")
+        self.db.commit()
+        push.deliver_one(self.path, self.key_path)
+        send.assert_not_called()
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM push_jobs").fetchone()[0], 0)
 
     @patch("push.webpush")
     def test_delivery_and_stale_assignment(self, send):

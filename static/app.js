@@ -372,6 +372,8 @@ function renderBoard() {
         showToast(error.message);
       }
     });
+    card.querySelector("[data-directions-ticket]").addEventListener("click", () =>
+      openDirections(Number(card.dataset.id)));
   });
   $$(".kanban-column").forEach((column) => {
     column.addEventListener("dragover", (event) => {
@@ -445,9 +447,19 @@ function ticketCard(ticket) {
     </button>
     <div class="ticket-touch-actions">
       <a class="button button-quiet" href="tel:${esc(ticket.phone.replace(/[^\d+]/g, ""))}">${t("Call customer")}</a>
+      <button class="button button-quiet" type="button" data-directions-ticket="${ticket.id}">${t("Directions")}</button>
       <label class="ticket-move-label"><span>${t("Move to")}</span><select class="ticket-move" aria-label="${esc(t("Move service for {customer}", { customer: ticket.customer }))}">${statuses.map((status) => `<option value="${status.key}" ${ticket.status === status.key ? "selected" : ""}>${t(status.label)}</option>`).join("")}</select></label>
     </div>
   </article>`;
+}
+
+function openDirections(ticketId) {
+  const ticket = state.tickets.find((item) => item.id === ticketId);
+  if (!ticket) return;
+  const destination = encodeURIComponent(ticket.address);
+  $("#google-directions").href = `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+  $("#apple-directions").href = `https://maps.apple.com/?daddr=${destination}&dirflg=d`;
+  openModal("directions-modal");
 }
 
 function renderCalendar() {

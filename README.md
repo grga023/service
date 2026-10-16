@@ -82,6 +82,10 @@ Each account has its own private calendar link containing a random token, shown 
 
 The feed uses local appointment times, requests a 30-minute refresh interval, and always sets an event end time, falling back to the estimated effort or one hour. Calendar providers choose their own refresh frequency, so updates may not appear instantly.
 
+Appointment reminders use the server's local timezone. Docker defaults to `Europe/Belgrade` for this deployment; set `TZ` in the environment if your service operates in another timezone.
+
+On a phone, tap **Directions** on a service card and choose **Google Maps** or **Apple Maps**. The app asks on every visit and does not save a maps preference.
+
 ### Address suggestions
 
 Start typing in **Service address** to see street/town suggestions, prioritized for **Banat, Serbia**. Short, unambiguous local town prefixes are expanded, Serbian Cyrillic map names are displayed in Latin script, and common shorthand such as `mars tit 2c elem` searches for **Maršala Tita, Elemir, 2C**. Select a result by touch/click or with the arrow keys and Enter. Selecting is optional: you can always type or edit the complete address manually. Existing saved addresses are not rewritten.
@@ -90,7 +94,7 @@ Lookups use the public [Photon](https://photon.komoot.io) service and [OpenStree
 
 ## Phone notifications
 
-Tap the **bell button in the top bar**, or open the workspace menu and choose **Notifications** directly below Calendar, then select **Enable notifications** on each device that should receive assignments. Use **Send test notification** to queue a test. Newly assigned or reassigned active services notify only the assigned technician's subscribed devices; ordinary edits do not send duplicate assignment alerts. Tapping an alert opens the service after authentication. Customer names, addresses, and phone numbers are deliberately omitted from lock-screen alerts.
+Tap the **bell button in the top bar**, or open the workspace menu and choose **Notifications** directly below Calendar, then select **Enable notifications** on each device that should receive assignments and reminders. Use **Send test notification** to queue a test. Newly assigned or reassigned active services notify only the assigned technician's subscribed devices; ordinary edits do not send duplicate assignment alerts. The assigned technician also gets a reminder when a scheduled visit is 30 minutes away. Tapping an alert opens the service after authentication. Customer names, addresses, and phone numbers are deliberately omitted from lock-screen alerts.
 
 On **iPhone/iPad (iOS/iPadOS 16.4+)**, open the HTTPS site in Safari, use **Share → Add to Home Screen**, then launch it from that icon and enable notifications inside the app. A normal Safari tab cannot receive iPhone web push. Android and supported desktop browsers can enable push from the site. Delivery depends on browser permission, connectivity, and device Focus/notification settings; it is not a guaranteed emergency alert system.
 
