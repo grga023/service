@@ -115,9 +115,12 @@ def enqueue_assignment(db, ticket, previous_assignee=None):
     if not ticket["assignee_id"] or ticket["assignee_id"] == previous_assignee or ticket["status"] == "done":
         return
     # Do not expose customer names, addresses, or phone numbers on a lock screen.
+    user = db.execute("SELECT language FROM users WHERE id=?", (ticket["assignee_id"],)).fetchone()
+    serbian = user and user["language"] == "sr-Latn"
     payload = json.dumps({
-        "title": "New service assigned",
-        "body": f"Service #{ticket['id']} has been assigned to you. Tap to view it.",
+        "title": "Dodeljen vam je novi servis" if serbian else "New service assigned",
+        "body": f"Dodeljen vam je servis #{ticket['id']}. Dodirnite za detalje." if serbian else
+            f"Service #{ticket['id']} has been assigned to you. Tap to view it.",
         "ticket_id": ticket["id"],
         "tag": f"assignment-{ticket['id']}",
     })
@@ -128,10 +131,15 @@ def enqueue_assignment(db, ticket, previous_assignee=None):
 
 
 def enqueue_test(db, subscription_id):
+    user = db.execute("""
+        SELECT u.language FROM users u JOIN push_subscriptions s ON s.user_id=u.id WHERE s.id=?
+    """, (subscription_id,)).fetchone()
+    serbian = user and user["language"] == "sr-Latn"
     db.execute("INSERT INTO push_jobs (subscription_id,payload) VALUES (?,?)", (
         subscription_id, json.dumps({
-            "title": "FurnaceDesk notifications",
-            "body": "This phone is ready to receive service assignments.",
+            "title": "FurnaceDesk obaveštenja" if serbian else "FurnaceDesk notifications",
+            "body": "Ovaj telefon je spreman za obaveštenja o dodeljenim servisima." if serbian else
+                "This phone is ready to receive service assignments.",
             "tag": "furnacedesk-test",
         }),
     ))

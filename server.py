@@ -102,6 +102,8 @@ def initialize():
             CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
         """)
         ticket_columns = {row["name"] for row in db.execute("PRAGMA table_info(tickets)")}
+        if "language" not in {row["name"] for row in db.execute("PRAGMA table_info(users)")}:
+            db.execute("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT 'en'")
         if "customer_id" not in ticket_columns:
             db.execute("ALTER TABLE tickets ADD COLUMN customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL")
         if "parts_json" not in ticket_columns:
@@ -262,6 +264,7 @@ def public_user(row):
         "username": row["username"],
         "roles": json.loads(row["roles"]),
         "active": bool(row["active"]),
+        "language": row["language"],
     }
 
 
@@ -476,7 +479,7 @@ class ServiceHandler(BaseHTTPRequestHandler):
         if path == "/":
             self.serve_static("index.html")
             return
-        if path in ("/app.js", "/styles.css", "/sw.js", "/manifest.webmanifest",
+        if path in ("/app.js", "/i18n.js", "/styles.css", "/sw.js", "/manifest.webmanifest",
                     "/icon-192.png", "/icon-512.png"):
             self.serve_static(path[1:])
             return
@@ -634,7 +637,15 @@ class ServiceHandler(BaseHTTPRequestHandler):
                 return
             try:
                 route_parts = path.strip("/").split("/")
-                if path == "/api/push/subscribe":
+                if path == "/api/preferences":
+                    language = data.get("language")
+                    if language not in ("en", "sr-Latn"):
+                        raise ValueError("Select English or Serbian (Latin).")
+                    db.execute("UPDATE users SET language=? WHERE id=?", (language, user["id"]))
+                    db.commit()
+                    updated = db.execute("SELECT * FROM users WHERE id=?", (user["id"],)).fetchone()
+                    self.send_json({"user": public_user(updated)})
+                elif path == "/api/push/subscribe":
                     subscription = push.validate_subscription(data.get("subscription"))
                     session_hash = hashlib.sha256(self.session_token().encode()).hexdigest()
                     existing = db.execute("SELECT user_id FROM push_subscriptions WHERE endpoint=?",

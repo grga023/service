@@ -89,6 +89,20 @@ class NotificationApiTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT COUNT(*) FROM push_subscriptions").fetchone()[0], 0)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM push_jobs").fetchone()[0], 0)
 
+    def test_language_is_account_scoped_and_persistent(self):
+        self.assertEqual(self.request("/api/preferences", {"language": "sr-Latn"})[0], 401)
+        self.request("/api/login", {"username": "admin", "password": "test-admin-password"})
+        self.assertEqual(self.request("/api/me")[1]["user"]["language"], "en")
+        status, result = self.request("/api/preferences", {"language": "sr-Latn"})
+        self.assertEqual(status, 200)
+        self.assertEqual(result["user"]["language"], "sr-Latn")
+        self.assertEqual(self.request("/api/preferences", {"language": "invalid"})[0], 400)
+        self.request("/api/logout", {})
+        self.browser = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        self.assertEqual(self.request("/api/login", {
+            "username": "admin", "password": "test-admin-password",
+        })[1]["user"]["language"], "sr-Latn")
+
 
 if __name__ == "__main__":
     unittest.main()

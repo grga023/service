@@ -6,6 +6,7 @@ const state = {
 const mobileLayout = window.matchMedia("(max-width: 1024px)");
 let pushRegistration = null;
 let pushSettings = null;
+const t = I18n.t;
 const statuses = [
   { key: "received", label: "Received" },
   { key: "in_progress", label: "In progress" },
@@ -20,7 +21,7 @@ const hasRole = (...roles) => roles.some((role) => state.user?.roles.includes(ro
 const canManage = () => hasRole("admin", "dispatcher");
 const roleName = (roles) => roles.map((role) => ({
   admin: "Admin", dispatcher: "Call receiver", technician: "Technician",
-}[role])).join(" · ");
+}[role])).map((name) => t(name)).join(" · ");
 
 async function api(url, options = {}) {
   const response = await fetch(url, {
@@ -31,7 +32,7 @@ async function api(url, options = {}) {
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && url !== "/api/login") showLogin();
-    throw new Error(result.error || "Something went wrong.");
+    throw new Error(t(result.error || "Something went wrong."));
   }
   return result;
 }
@@ -49,6 +50,7 @@ function showLogin() {
 
 function showApp(user) {
   state.user = user;
+  I18n.set(user.language);
   $("#login-screen").classList.add("hidden");
   $("#app").classList.remove("hidden");
   $("#user-name").textContent = user.username;
@@ -64,6 +66,31 @@ function showApp(user) {
   showView("board");
 }
 
+async function changeLanguage(event) {
+  const language = event.currentTarget.value;
+  const previous = I18n.language;
+  $$("#language, #login-language").forEach((select) => { select.disabled = true; });
+  try {
+    if (state.user) {
+      const result = await api("/api/preferences", { method: "POST", body: JSON.stringify({ language }) });
+      state.user = result.user;
+    }
+    I18n.set(language);
+    if (state.user) {
+      $("#user-role").textContent = roleName(state.user.roles);
+      showView(state.view);
+      await refresh();
+      if (state.view === "users") await loadUsers();
+      showToast(t("Language saved."));
+    }
+  } catch (error) {
+    I18n.set(previous);
+    showToast(error.message);
+  } finally { $$("#language, #login-language").forEach((select) => { select.disabled = false; }); }
+}
+$("#language").addEventListener("change", changeLanguage);
+$("#login-language").addEventListener("change", changeLanguage);
+
 async function openNotificationSettings() {
   setMenuOpen(false);
   if ($("#notification-modal").classList.contains("hidden")) openModal("notification-modal");
@@ -74,32 +101,32 @@ async function openNotificationSettings() {
   $("#test-notification").classList.add("hidden");
   const status = $("#notification-status");
   if (!window.isSecureContext || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-    status.textContent = "Push is unavailable here. Use HTTPS and a supported browser. On iPhone, open the installed Home Screen app.";
+    status.textContent = t("Push is unavailable here. Use HTTPS and a supported browser. On iPhone, open the installed Home Screen app.");
     return;
   }
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   if (ios && !navigator.standalone && !window.matchMedia("(display-mode: standalone)").matches) {
-    status.textContent = "Add FurnaceDesk to your Home Screen first, then open it from that icon.";
+    status.textContent = t("Add FurnaceDesk to your Home Screen first, then open it from that icon.");
     return;
   }
-  status.textContent = "Checking this device...";
+  status.textContent = t("Checking this device...");
   try {
     await navigator.serviceWorker.register("/sw.js");
     pushRegistration = await navigator.serviceWorker.ready;
     pushSettings = await api("/api/push");
     const subscription = await pushRegistration.pushManager.getSubscription();
     const enabled = pushSettings.subscribed && !!subscription && Notification.permission === "granted";
-    status.textContent = enabled ? "Notifications are enabled on this device." :
+    status.textContent = t(enabled ? "Notifications are enabled on this device." :
       Notification.permission === "denied" ? "Notifications are blocked. Allow them in your device or browser settings, then reopen this screen." :
-        "Notifications are off on this device.";
+        "Notifications are off on this device.");
     $("#enable-notifications").classList.toggle("hidden", enabled);
     $("#enable-notifications").disabled = Notification.permission === "denied";
     $("#disable-notifications").classList.toggle("hidden", !pushSettings.subscribed);
     $("#test-notification").classList.toggle("hidden", !enabled);
   } catch (error) {
     $("#notification-error").textContent = error.message;
-    status.textContent = "Could not check notification settings. Close this screen and try again.";
+    status.textContent = t("Could not check notification settings. Close this screen and try again.");
   }
 }
 
@@ -111,13 +138,13 @@ $("#enable-notifications").addEventListener("click", async () => {
   try {
     // Must happen directly inside a user gesture for iOS permission prompts.
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") throw new Error("Permission was not granted. You can enable notifications later in device settings.");
-    if (!pushRegistration || !pushSettings) throw new Error("Reopen notification settings and try again.");
+    if (permission !== "granted") throw new Error(t("Permission was not granted. You can enable notifications later in device settings."));
+    if (!pushRegistration || !pushSettings) throw new Error(t("Reopen notification settings and try again."));
     const key = Uint8Array.from(atob(pushSettings.public_key.replace(/-/g, "+").replace(/_/g, "/")), (char) => char.charCodeAt(0));
     const subscription = await pushRegistration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     await api("/api/push/subscribe", { method: "POST", body: JSON.stringify({ subscription: subscription.toJSON() }) });
     await openNotificationSettings();
-    showToast("Notifications enabled on this device.");
+    showToast(t("Notifications enabled on this device."));
   } catch (error) {
     $("#notification-error").textContent = error.message;
   } finally { button.disabled = false; }
@@ -130,7 +157,7 @@ $("#disable-notifications").addEventListener("click", async () => {
     await api("/api/push/unsubscribe", { method: "POST", body: "{}" });
     const subscription = await pushRegistration?.pushManager.getSubscription();
     if (subscription && !await subscription.unsubscribe()) {
-      throw new Error("Server notifications are disabled, but the browser subscription could not be removed. Try again.");
+      throw new Error(t("Server notifications are disabled, but the browser subscription could not be removed. Try again."));
     }
     await openNotificationSettings();
   } catch (error) { $("#notification-error").textContent = error.message; }
@@ -142,7 +169,7 @@ $("#test-notification").addEventListener("click", async () => {
   $("#notification-error").textContent = "";
   try {
     await api("/api/push/test", { method: "POST", body: "{}" });
-    $("#notification-status").textContent = "Test queued. If it does not arrive, check notification permissions, Focus mode, and server push-delivery logs.";
+    $("#notification-status").textContent = t("Test queued. If it does not arrive, check notification permissions, Focus mode, and server push-delivery logs.");
   } catch (error) { $("#notification-error").textContent = error.message; }
   finally { button.disabled = false; }
 });
@@ -155,7 +182,7 @@ function openNotificationTicket() {
   history.replaceState(null, "", url);
   const ticket = state.tickets.find((item) => item.id === ticketId);
   if (ticket) openTicket(ticketId);
-  else showToast("This service is no longer assigned to you or is unavailable.");
+  else showToast(t("This service is no longer assigned to you or is unavailable."));
 }
 
 async function refresh() {
@@ -177,7 +204,7 @@ async function refresh() {
 function formatDate(value, options = { month: "short", day: "numeric" }) {
   if (!value) return "";
   const date = new Date(value);
-  return new Intl.DateTimeFormat("en", options).format(date);
+  return new Intl.DateTimeFormat(I18n.locale, options).format(date);
 }
 
 function formatTime(value) {
@@ -197,8 +224,8 @@ function formatHours(value) {
 function updateEffortPreview() {
   const value = $("#estimated-effort").value;
   const hours = effortHours(value);
-  $("#effort-hours").textContent = hours > 0 ? `Estimated: ${formatHours(hours)}` :
-    value.trim() ? "Use values such as 1h, 1.5d, or 1w" : "Enter an estimate to see hours";
+  $("#effort-hours").textContent = hours > 0 ? t("Estimated: {hours}", { hours: formatHours(hours) }) :
+    t(value.trim() ? "Use values such as 1h, 1.5d, or 1w" : "Enter an estimate to see hours");
 }
 
 function renderBoard() {
@@ -206,11 +233,11 @@ function renderBoard() {
   const visible = state.tickets.filter((ticket) =>
     ticket.status !== "done" && [ticket.customer, ticket.phone, ticket.address, ticket.appliance_model, ticket.notes]
       .some((value) => String(value || "").toLowerCase().includes(query)));
-  $("#ticket-count").textContent = `${visible.length} ${visible.length === 1 ? "service" : "services"}`;
+  $("#ticket-count").textContent = t(visible.length === 1 ? "{count} service" : "{count} services", { count: visible.length });
   $("#board-tabs").innerHTML = statuses.map((status) => `
     <button type="button" role="tab" aria-selected="${state.boardStatus === status.key}"
       aria-controls="column-${status.key}" id="tab-${status.key}" data-board-status="${status.key}">
-      <span class="status-dot ${status.key}"></span><span>${status.label}</span>
+      <span class="status-dot ${status.key}"></span><span>${t(status.label)}</span>
       <span class="tab-count">${visible.filter((ticket) => ticket.status === status.key).length}</span>
     </button>`).join("");
   $$("[data-board-status]").forEach((button) => button.addEventListener("click", () => {
@@ -220,9 +247,9 @@ function renderBoard() {
   }));
   $("#board").innerHTML = statuses.map((status) => {
     const tickets = visible.filter((ticket) => ticket.status === status.key);
-    return `<section class="kanban-column ${state.boardStatus === status.key ? "mobile-selected" : ""}" id="column-${status.key}" data-status="${status.key}" aria-label="${status.label}">
-      <div class="column-heading"><div class="column-title"><span class="status-dot ${status.key}"></span>${status.label}</div><span class="column-count">${tickets.length}</span></div>
-      <div class="ticket-list">${tickets.length ? tickets.map(ticketCard).join("") : '<div class="empty-column">No services here yet</div>'}</div>
+    return `<section class="kanban-column ${state.boardStatus === status.key ? "mobile-selected" : ""}" id="column-${status.key}" data-status="${status.key}" aria-label="${t(status.label)}">
+      <div class="column-heading"><div class="column-title"><span class="status-dot ${status.key}"></span>${t(status.label)}</div><span class="column-count">${tickets.length}</span></div>
+      <div class="ticket-list">${tickets.length ? tickets.map(ticketCard).join("") : `<div class="empty-column">${t("No services here yet")}</div>`}</div>
     </section>`;
   }).join("");
   $$(".ticket-card").forEach((card) => {
@@ -281,7 +308,7 @@ async function moveTicket(ticketId, nextStatus) {
   await api(`/api/tickets/${ticketId}`, { method: "PUT", body: JSON.stringify({ status: nextStatus }) });
   state.boardStatus = nextStatus;
   await refresh();
-  showToast(`Service moved to ${statusLabel(nextStatus)}.`);
+  showToast(t("Service moved to {status}.", { status: statusLabel(nextStatus) }));
 }
 
 function renderDoneServices() {
@@ -294,15 +321,15 @@ function renderDoneServices() {
   $("#done-earnings").textContent = formatAmount(allDone.reduce((total, ticket) => total + ticket.earnings, 0));
   $("#done-parts-margin").textContent = formatAmount(allDone.reduce((total, ticket) => total + ticket.parts_margin, 0));
   $("#done-labor-transport").textContent = formatAmount(allDone.reduce((total, ticket) => total + ticket.labor_cost + ticket.transport_cost, 0));
-  $("#done-count").textContent = `${done.length} ${done.length === 1 ? "service" : "services"}`;
+  $("#done-count").textContent = t(done.length === 1 ? "{count} service" : "{count} services", { count: done.length });
   $("#done-list").innerHTML = done.length ? done.map((ticket) => `
     <button class="done-card" data-id="${ticket.id}">
       <span class="done-date">${esc(formatDate(ticket.updated_at, { year: "numeric", month: "short", day: "numeric" }))}</span>
       <span class="history-model">${esc(ticket.appliance_model)}</span>
       <span class="done-customer"><strong>${esc(ticket.customer)}</strong><span>${esc(ticket.phone)} · ${esc(ticket.address)}</span></span>
-      <span class="done-total"><strong>Earned ${formatAmount(ticket.earnings)}</strong><span>Parts margin ${formatAmount(ticket.parts_margin)} · Labor ${formatAmount(ticket.labor_cost)} · Transport ${formatAmount(ticket.transport_cost)}</span></span>
+      <span class="done-total"><strong>${t("Earned {amount}", { amount: formatAmount(ticket.earnings) })}</strong><span>${t("Parts margin {margin} · Labor {labor} · Transport {transport}", { margin: formatAmount(ticket.parts_margin), labor: formatAmount(ticket.labor_cost), transport: formatAmount(ticket.transport_cost) })}</span></span>
       <span class="history-arrow">›</span>
-    </button>`).join("") : '<div class="done-empty">No completed services found.</div>';
+    </button>`).join("") : `<div class="done-empty">${t("No completed services found.")}</div>`;
   $$(".done-card").forEach((card) => card.addEventListener("click", () =>
     openTicket(Number(card.dataset.id))));
 }
@@ -313,17 +340,17 @@ function ticketCard(ticket) {
     ? `<span class="appointment-chip">◷ ${esc(formatDate(ticket.appointment_start))}, ${esc(formatTime(ticket.appointment_start))}${ticket.estimated_hours ? ` · ${esc(formatHours(ticket.estimated_hours))}` : ""}</span>`
     : '<span class="appointment-chip"></span>';
   return `<article class="ticket-card" data-id="${ticket.id}" draggable="${!mobileLayout.matches}">
-    <button class="ticket-open" type="button" aria-label="Open service for ${esc(ticket.customer)}">
+    <button class="ticket-open" type="button" aria-label="${esc(t("Open service for {customer}", { customer: ticket.customer }))}">
     <div class="ticket-card-top"><span class="model-tag">${esc(ticket.appliance_model)}</span><span class="ticket-id">#${ticket.id}</span></div>
     <h3 class="ticket-name">${esc(ticket.customer)}</h3>
     <p class="ticket-phone">${esc(ticket.phone)}</p>
     <p class="ticket-address">${esc(ticket.address)}</p>
-    ${ticket.needed_parts ? `<div class="part-chip">Parts needed: ${esc(ticket.needed_parts)}</div>` : ""}
+    ${ticket.needed_parts ? `<div class="part-chip">${esc(t("Parts needed: {parts}", { parts: ticket.needed_parts }))}</div>` : ""}
     <div class="ticket-footer">${appointment}<span class="assignee-chip">${esc(technician?.username || "")}</span></div>
     </button>
     <div class="ticket-touch-actions">
-      <a class="button button-quiet" href="tel:${esc(ticket.phone.replace(/[^\d+]/g, ""))}">Call customer</a>
-      <label class="ticket-move-label"><span>Move to</span><select class="ticket-move" aria-label="Move service for ${esc(ticket.customer)}">${statuses.map((status) => `<option value="${status.key}" ${ticket.status === status.key ? "selected" : ""}>${status.label}</option>`).join("")}</select></label>
+      <a class="button button-quiet" href="tel:${esc(ticket.phone.replace(/[^\d+]/g, ""))}">${t("Call customer")}</a>
+      <label class="ticket-move-label"><span>${t("Move to")}</span><select class="ticket-move" aria-label="${esc(t("Move service for {customer}", { customer: ticket.customer }))}">${statuses.map((status) => `<option value="${status.key}" ${ticket.status === status.key ? "selected" : ""}>${t(status.label)}</option>`).join("")}</select></label>
     </div>
   </article>`;
 }
@@ -331,7 +358,7 @@ function ticketCard(ticket) {
 function renderCalendar() {
   const year = state.month.getFullYear();
   const month = state.month.getMonth();
-  $("#calendar-month").textContent = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(state.month);
+  $("#calendar-month").textContent = new Intl.DateTimeFormat(I18n.locale, { month: "long", year: "numeric" }).format(state.month);
   const first = new Date(year, month, 1);
   const mondayOffset = (first.getDay() + 6) % 7;
   const start = new Date(year, month, 1 - mondayOffset);
@@ -345,9 +372,9 @@ function renderCalendar() {
     const events = state.tickets.filter((ticket) => ticket.status !== "done" && ticket.appointment_start?.slice(0, 10) === key);
     const classes = ["calendar-day", state.calendarDay === key ? "selected-day" : "", day.getMonth() !== month ? "outside" : "",
       day.toDateString() === today.toDateString() ? "today" : ""].filter(Boolean).join(" ");
-    days.push(`<div class="${classes}" data-date="${key}" role="button" tabindex="0" aria-label="${key}, ${events.length} visits" title="Show visits on ${key}">
+    days.push(`<div class="${classes}" data-date="${key}" role="button" tabindex="0" aria-label="${t("{date}, {count} visits", { date: key, count: events.length })}" title="${t("Show visits on {date}", { date: key })}">
       <span class="day-number">${day.getDate()}</span>
-      <span class="day-visit-count">${events.length ? `${events.length} ${events.length === 1 ? "visit" : "visits"}` : ""}</span>
+      <span class="day-visit-count">${events.length ? t(events.length === 1 ? "{count} visit" : "{count} visits", { count: events.length }) : ""}</span>
       ${events.slice(0, 2).map((ticket) => `<div class="day-event ${ticket.status}" data-ticket-id="${ticket.id}">${esc(formatTime(ticket.appointment_start))} ${esc(ticket.customer)}</div>`).join("")}
       ${events.length > 2 ? `<div class="more-events">+${events.length - 2} more</div>` : ""}
     </div>`);
@@ -372,8 +399,8 @@ function renderCalendar() {
       if (canManage()) openTicket(null, `${cell.dataset.date}T09:00`);
     });
   });
-  $("#agenda-heading").textContent = state.calendarDay ? formatDate(`${state.calendarDay}T12:00`, { month: "short", day: "numeric", weekday: "short" }) : "Next visits";
-  $("#agenda-eyebrow").textContent = state.calendarDay ? "SELECTED DAY" : "UPCOMING";
+  $("#agenda-heading").textContent = state.calendarDay ? formatDate(`${state.calendarDay}T12:00`, { month: "short", day: "numeric", weekday: "short" }) : t("Next visits");
+  $("#agenda-eyebrow").textContent = t(state.calendarDay ? "SELECTED DAY" : "UPCOMING");
   $("#schedule-day").classList.toggle("hidden", !state.calendarDay || !canManage());
   const nextVisits = state.tickets
     .filter((ticket) => ticket.status !== "done" && ticket.appointment_start &&
@@ -385,7 +412,7 @@ function renderCalendar() {
       <p class="agenda-time">${esc(formatDate(ticket.appointment_start, { weekday: "short", month: "short", day: "numeric" }))} · ${esc(formatTime(ticket.appointment_start))}</p>
       <h3 class="agenda-customer">${esc(ticket.customer)}</h3>
       <p class="agenda-detail">${esc(ticket.appliance_model)} · ${esc(ticket.address)}${ticket.estimated_hours ? ` · ${esc(formatHours(ticket.estimated_hours))}` : ""}</p>
-    </button>`).join("") : '<p class="agenda-empty">No visits scheduled. Select a day to plan your next service.</p>';
+    </button>`).join("") : `<p class="agenda-empty">${t("No visits scheduled. Select a day to plan your next service.")}</p>`;
   $$(".agenda-item").forEach((item) => item.addEventListener("click", () => openTicket(Number(item.dataset.id))));
 }
 
@@ -401,8 +428,8 @@ function showView(view) {
     if (button.dataset.view === view) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
-  $("#page-title").textContent = view === "calendar" ? "Calendar" : view === "users" ? "Team members" :
-    view === "customers" ? "Customers" : view === "done" ? "Done services" : "Service board";
+  $("#page-title").textContent = t(view === "calendar" ? "Calendar" : view === "users" ? "Team members" :
+    view === "customers" ? "Customers" : view === "done" ? "Done services" : "Service board");
   setMenuOpen(false);
   window.scrollTo({ top: 0 });
   if (view === "users") loadUsers();
@@ -454,17 +481,17 @@ function openTicket(ticketId = null, appointment = "", customer = null) {
   form.reset();
   $("#ticket-error").textContent = "";
   form.elements.id.value = ticketId || "";
-  $("#ticket-modal-title").textContent = ticketId ? "Edit service" : "New service";
+  $("#ticket-modal-title").textContent = t(ticketId ? "Edit service" : "New service");
   form.elements.status.value = "received";
   $("#status-field").classList.toggle("hidden", !ticketId);
   form.elements.appointment_start.value = appointment;
-  $("#effort-hours").textContent = "Enter an estimate to see hours";
+  $("#effort-hours").textContent = t("Enter an estimate to see hours");
   form.elements.status.querySelector('option[value="done"]')?.remove();
   $("#customer-lookup").value = "";
   $("#customer-suggestions").classList.add("hidden");
   const ticket = state.tickets.find((item) => item.id === ticketId);
   if (ticket?.status === "done") {
-    form.elements.status.insertAdjacentHTML("beforeend", '<option value="done">Done</option>');
+    form.elements.status.insertAdjacentHTML("beforeend", `<option value="done">${t("Done")}</option>`);
   }
   if (ticket) {
     Object.entries(ticket).forEach(([key, value]) => {
@@ -479,7 +506,7 @@ function openTicket(ticketId = null, appointment = "", customer = null) {
     renderNeededPartRows([]);
   } else renderNeededPartRows([]);
   updateEffortPreview();
-  form.elements.assignee_id.innerHTML = `<option value="">Unassigned</option>${state.technicians.map((person) =>
+  form.elements.assignee_id.innerHTML = `<option value="">${t("Unassigned")}</option>${state.technicians.map((person) =>
     `<option value="${person.id}">${esc(person.username)}</option>`).join("")}`;
   if (ticket?.assignee_id) form.elements.assignee_id.value = ticket.assignee_id;
   const techLimited = hasRole("technician") && !canManage();
@@ -488,9 +515,9 @@ function openTicket(ticketId = null, appointment = "", customer = null) {
     element.disabled = techLimited && !["status", "notes"].includes(element.name);
   }
   $$("#needed-parts-list input, #add-needed-part").forEach((element) => { element.disabled = techLimited; });
-  $(".modal-footer button[type=submit]", form).textContent = techLimited ? "Save updates" : "Save service";
+  $(".modal-footer button[type=submit]", form).textContent = t(techLimited ? "Save updates" : "Save service");
   $("#mark-done").classList.toggle("hidden", !ticket);
-  $("#mark-done").textContent = ticket?.status === "done" ? "Edit completion costs" : "Mark service done";
+  $("#mark-done").textContent = t(ticket?.status === "done" ? "Edit completion costs" : "Mark service done");
   openModal("ticket-modal");
 }
 
@@ -502,8 +529,8 @@ function renderCustomerList() {
     <button class="customer-card ${customer.id === state.selectedCustomerId ? "selected" : ""}" data-customer-id="${customer.id}">
       <span class="customer-avatar">${esc(customer.name.slice(0, 1).toUpperCase())}</span>
       <span class="customer-card-main"><strong>${esc(customer.name)}</strong><span>${esc(customer.phone)}</span></span>
-      <span class="customer-service-count">${customer.service_count} ${customer.service_count === 1 ? "service" : "services"}</span>
-    </button>`).join("") : '<div class="customer-empty">No customers found.</div>';
+      <span class="customer-service-count">${t(customer.service_count === 1 ? "{count} service" : "{count} services", { count: customer.service_count })}</span>
+    </button>`).join("") : `<div class="customer-empty">${t("No customers found.")}</div>`;
   $$(".customer-card").forEach((card) => card.addEventListener("click", () =>
     selectCustomer(Number(card.dataset.customerId))));
 }
@@ -518,25 +545,25 @@ async function selectCustomer(customerId) {
       <div class="customer-profile">
         <div class="customer-profile-heading">
           <div class="customer-avatar customer-avatar-large">${esc(customer.name.slice(0, 1).toUpperCase())}</div>
-          <div><p class="eyebrow">CUSTOMER PROFILE</p><h2>${esc(customer.name)}</h2><a class="customer-phone" href="tel:${esc(customer.phone)}">${esc(customer.phone)}</a></div>
-          <button class="button button-primary customer-new-service" data-customer-new="${customer.id}">＋ New service</button>
+          <div><p class="eyebrow">${t("CUSTOMER PROFILE")}</p><h2>${esc(customer.name)}</h2><a class="customer-phone" href="tel:${esc(customer.phone)}">${esc(customer.phone)}</a></div>
+          <button class="button button-primary customer-new-service" data-customer-new="${customer.id}">${t("＋ New service")}</button>
         </div>
         <p class="customer-profile-address">${esc(customer.address)}</p>
-        <div class="customer-stats">${services.length} ${services.length === 1 ? "service" : "services"} <span>·</span> ${[...new Set(services.map((service) => service.appliance_model))].length} ${new Set(services.map((service) => service.appliance_model)).size === 1 ? "device" : "devices"}</div>
-        <div class="history-heading"><div><p class="eyebrow">CUSTOMER HISTORY</p><h3>Previous services &amp; devices</h3></div></div>
+        <div class="customer-stats">${t(services.length === 1 ? "{count} service" : "{count} services", { count: services.length })} <span>·</span> ${t(new Set(services.map((service) => service.appliance_model)).size === 1 ? "{count} device" : "{count} devices", { count: new Set(services.map((service) => service.appliance_model)).size })}</div>
+        <div class="history-heading"><div><p class="eyebrow">${t("CUSTOMER HISTORY")}</p><h3>${t("Previous services & devices")}</h3></div></div>
         <div class="service-history">${services.length ? services.map((service) => `
           <button class="history-item" data-history-ticket="${service.id}">
             <span class="history-model">${esc(service.appliance_model)}</span>
-            <span class="history-main"><strong>${esc(formatDate(service.created_at))} · ${esc(service.status === "done" ? "Done" : statusLabel(service.status))}</strong>
+            <span class="history-main"><strong>${esc(formatDate(service.created_at))} · ${esc(service.status === "done" ? t("Done") : statusLabel(service.status))}</strong>
               <span>${esc(service.address)}</span>
-              ${service.estimated_hours ? `<span>Estimated effort: ${esc(formatHours(service.estimated_hours))}</span>` : ""}
-              ${service.parts.length ? `<span>Parts used: ${esc(service.parts.map((part) => `${part.quantity} × ${part.name} (customer ${formatAmount(part.regular_price)}, cost ${formatAmount(part.discounted_cost)})`).join(", "))}</span><span>Parts margin: ${formatAmount(service.parts_margin)}</span>` : service.used_parts ? `<span>Parts used: ${esc(service.used_parts)}</span>` : ""}
-              ${service.needed_parts ? `<span>Parts needed: ${esc(service.needed_parts)}</span>` : ""}
-              ${service.status === "done" ? `<span>Customer total: ${formatAmount(service.customer_total)}</span><span>Earned: ${formatAmount(service.earnings)} (parts margin ${formatAmount(service.parts_margin)}, labor ${formatAmount(service.labor_cost)}, transport ${formatAmount(service.transport_cost)})</span>` : ""}
+              ${service.estimated_hours ? `<span>${esc(t("Estimated effort: {hours}", { hours: formatHours(service.estimated_hours) }))}</span>` : ""}
+              ${service.parts.length ? `<span>${esc(t("Parts used: {parts}", { parts: service.parts.map((part) => t("{quantity} × {name} (customer {price}, cost {cost})", { quantity: part.quantity, name: part.name, price: formatAmount(part.regular_price), cost: formatAmount(part.discounted_cost) })).join(", ") }))}</span><span>${t("Parts margin: {amount}", { amount: formatAmount(service.parts_margin) })}</span>` : service.used_parts ? `<span>${esc(t("Parts used: {parts}", { parts: service.used_parts }))}</span>` : ""}
+              ${service.needed_parts ? `<span>${esc(t("Parts needed: {parts}", { parts: service.needed_parts }))}</span>` : ""}
+              ${service.status === "done" ? `<span>${t("Customer total: {amount}", { amount: formatAmount(service.customer_total) })}</span><span>${t("Earned: {amount} (parts margin {margin}, labor {labor}, transport {transport})", { amount: formatAmount(service.earnings), margin: formatAmount(service.parts_margin), labor: formatAmount(service.labor_cost), transport: formatAmount(service.transport_cost) })}</span>` : ""}
               ${service.notes ? `<span>${esc(service.notes)}</span>` : ""}
             </span>
             <span class="history-arrow">›</span>
-          </button>`).join("") : '<p class="agenda-empty">No previous services yet.</p>'}</div>
+          </button>`).join("") : `<p class="agenda-empty">${t("No previous services yet.")}</p>`}</div>
       </div>`;
     $(".customers-layout").classList.add("show-customer");
     $("#customer-back").classList.remove("hidden");
@@ -551,7 +578,7 @@ async function selectCustomer(customerId) {
 }
 
 function statusLabel(status) {
-  return statuses.find((item) => item.key === status)?.label || "Problem";
+  return t(statuses.find((item) => item.key === status)?.label || "Problem");
 }
 
 function customerMatches(customer, query) {
@@ -562,7 +589,7 @@ function customerMatches(customer, query) {
 }
 
 function formatAmount(value) {
-  return Number(value || 0).toFixed(2);
+  return new Intl.NumberFormat(I18n.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }).format(Number(value || 0));
 }
 
 function searchCustomers(query) {
@@ -572,7 +599,7 @@ function searchCustomers(query) {
     customerMatches(customer, normalized)).slice(0, 6) : [];
   list.innerHTML = matches.map((customer) => `
     <button type="button" class="customer-suggestion" role="option" data-select-customer="${customer.id}">
-      <strong>${esc(customer.name)}</strong><span>${esc(customer.phone)} · ${customer.service_count} ${customer.service_count === 1 ? "service" : "services"}</span>
+      <strong>${esc(customer.name)}</strong><span>${esc(customer.phone)} · ${t(customer.service_count === 1 ? "{count} service" : "{count} services", { count: customer.service_count })}</span>
     </button>`).join("");
   list.classList.toggle("hidden", matches.length === 0);
   $$("[data-select-customer]", list).forEach((button) => button.addEventListener("click", () => {
@@ -592,7 +619,7 @@ function openUser(user = null) {
   form.reset();
   $("#user-error").textContent = "";
   form.elements.id.value = user?.id || "";
-  $("#user-modal-title").textContent = user ? "Edit team member" : "Add team member";
+  $("#user-modal-title").textContent = t(user ? "Edit team member" : "Add team member");
   form.elements.username.value = user?.username || "";
   form.elements.password.required = !user;
   form.elements.password.value = "";
@@ -615,10 +642,10 @@ async function loadUsers() {
     state.users = data.users;
     $("#user-list").innerHTML = data.users.map((user) => `
       <div class="user-row">
-        <strong>${esc(user.username)}${user.id === state.user.id ? " (you)" : ""}</strong>
+        <strong>${esc(user.username)}${user.id === state.user.id ? ` ${t("(you)")}` : ""}</strong>
         <div class="role-pills">${user.roles.map((role) => `<span class="role-pill">${esc(roleName([role]))}</span>`).join("")}</div>
-        <span class="account-state ${user.active ? "" : "inactive"}">${user.active ? "Active" : "Inactive"}</span>
-        <button class="button button-quiet user-action" data-edit-user="${user.id}">Edit</button>
+        <span class="account-state ${user.active ? "" : "inactive"}">${t(user.active ? "Active" : "Inactive")}</span>
+        <button class="button button-quiet user-action" data-edit-user="${user.id}">${t("Edit")}</button>
       </div>`).join("");
     $$("[data-edit-user]").forEach((button) => button.addEventListener("click", () =>
       openUser(state.users.find((user) => user.id === Number(button.dataset.editUser)))));
@@ -642,11 +669,11 @@ $("#login-form").addEventListener("submit", async (event) => {
 function renderPartRows(parts) {
   $("#parts-list").innerHTML = (parts.length ? parts : [{}]).map((part) => `
     <div class="part-row">
-      <label class="part-name-field"><span>Part name</span><input class="part-name" aria-label="Part name" maxlength="120" placeholder="Part name" value="${esc(part.name || "")}"></label>
-      <label class="part-quantity-field"><span>Quantity</span><input class="part-quantity" aria-label="Quantity" type="number" min="0" step="0.001" inputmode="decimal" placeholder="Qty" value="${part.quantity ?? ""}"></label>
-      <label class="part-price-field"><span>Customer price / unit</span><input class="part-price" aria-label="Customer price per unit" type="number" min="0" max="100000000" step="0.01" inputmode="decimal" placeholder="0.00" value="${part.regular_price ?? ""}"></label>
-      <label class="part-cost-field"><span>Your cost / unit</span><input class="part-cost" aria-label="Your cost per unit" type="number" min="0" max="100000000" step="0.01" inputmode="decimal" placeholder="0.00" value="${part.discounted_cost ?? ""}"></label>
-      <button class="icon-button remove-part" type="button" aria-label="Remove part">×</button>
+      <label class="part-name-field"><span>${t("Part name")}</span><input class="part-name" aria-label="${t("Part name")}" maxlength="120" placeholder="${t("Part name")}" value="${esc(part.name || "")}"></label>
+      <label class="part-quantity-field"><span>${t("Quantity")}</span><input class="part-quantity" aria-label="${t("Quantity")}" type="number" min="0" step="0.001" inputmode="decimal" placeholder="${t("Qty")}" value="${part.quantity ?? ""}"></label>
+      <label class="part-price-field"><span>${t("Customer price / unit")}</span><input class="part-price" aria-label="${t("Customer price per unit")}" type="number" min="0" max="100000000" step="0.01" inputmode="decimal" placeholder="0.00" value="${part.regular_price ?? ""}"></label>
+      <label class="part-cost-field"><span>${t("Your cost / unit")}</span><input class="part-cost" aria-label="${t("Your cost per unit")}" type="number" min="0" max="100000000" step="0.01" inputmode="decimal" placeholder="0.00" value="${part.discounted_cost ?? ""}"></label>
+      <button class="icon-button remove-part" type="button" aria-label="${t("Remove part")}">×</button>
     </div>`).join("");
   $$(".part-row").forEach((row) => row.querySelectorAll("input").forEach((input) =>
     input.addEventListener("input", updateCompletionTotal)));
@@ -660,9 +687,9 @@ function renderPartRows(parts) {
 function renderNeededPartRows(parts) {
   $("#needed-parts-list").innerHTML = (parts.length ? parts : [{}]).map((part) => `
     <div class="needed-part-row">
-      <input class="needed-part-name" aria-label="Needed part name" maxlength="120" placeholder="Part name" value="${esc(part.name || "")}">
-      <input class="needed-part-quantity" aria-label="Needed part quantity" type="number" min="0" step="0.001" inputmode="decimal" placeholder="Quantity" value="${part.quantity ?? ""}">
-      <button class="icon-button remove-needed-part" type="button" aria-label="Remove needed part">×</button>
+      <input class="needed-part-name" aria-label="${t("Needed part name")}" maxlength="120" placeholder="${t("Part name")}" value="${esc(part.name || "")}">
+      <input class="needed-part-quantity" aria-label="${t("Needed part quantity")}" type="number" min="0" step="0.001" inputmode="decimal" placeholder="${t("Quantity")}" value="${part.quantity ?? ""}">
+      <button class="icon-button remove-needed-part" type="button" aria-label="${t("Remove needed part")}">×</button>
     </div>`).join("");
   $$(".remove-needed-part").forEach((button) => button.addEventListener("click", () => {
     button.closest(".needed-part-row").remove();
@@ -695,8 +722,8 @@ function openCompletion(ticketId) {
   form.elements.ticket_id.value = ticket.id;
   form.elements.labor_cost.value = ticket.labor_cost || 0;
   form.elements.transport_cost.value = ticket.transport_cost || 0;
-  $("#completion-modal-title").textContent = ticket.status === "done" ? "Edit service costs" : "Complete service";
-  $(".modal-footer button[type=submit]", form).textContent = ticket.status === "done" ? "Save costs" : "Save & mark done";
+  $("#completion-modal-title").textContent = t(ticket.status === "done" ? "Edit service costs" : "Complete service");
+  $(".modal-footer button[type=submit]", form).textContent = t(ticket.status === "done" ? "Save costs" : "Save & mark done");
   renderPartRows(ticket.status === "done" ? ticket.parts || [] : ticket.needed_parts_items || []);
   openModal("completion-modal");
 }
@@ -726,7 +753,7 @@ $("#completion-form").addEventListener("submit", async (event) => {
     closeModal("completion-modal");
     closeModal("ticket-modal");
     await refresh();
-    showToast("Service costs saved. Service marked done.");
+    showToast(t("Service costs saved. Service marked done."));
   } catch (error) {
     $("#completion-error").textContent = error.message;
     $("#completion-error").scrollIntoView({ block: "nearest" });
@@ -763,7 +790,7 @@ $("#ticket-form").addEventListener("submit", async (event) => {
     if (payload.status !== "done") state.boardStatus = payload.status;
     closeModal("ticket-modal");
     await refresh();
-    showToast(id ? "Service updated." : "Service created.");
+    showToast(t(id ? "Service updated." : "Service created."));
   } catch (error) {
     $("#ticket-error").textContent = error.message;
     $("#ticket-error").scrollIntoView({ block: "nearest" });
@@ -790,7 +817,7 @@ $("#user-form").addEventListener("submit", async (event) => {
     const technicians = await api("/api/technicians");
     state.technicians = technicians.users;
     renderBoard();
-    showToast(id ? "Team member updated." : "Team member added.");
+    showToast(t(id ? "Team member updated." : "Team member added."));
   } catch (error) {
     $("#user-error").textContent = error.message;
     $("#user-error").scrollIntoView({ block: "nearest" });

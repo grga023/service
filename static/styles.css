@@ -44,6 +44,7 @@ input[type=checkbox] { accent-color: #8ea3ff; }
 .button:hover { background: #303642; }
 .button:disabled { opacity: .55; cursor: wait; }
 .notification-description { color: #a4adbb; font-size: 14px; line-height: 1.65; }
+.language-setting { margin: 8px 10px; font-size: 12px; }
 .button-primary { border-color: #a9b8ff40; background: #8499f2; color: #101318; }
 .button-primary:hover { background: #a0b0ff; }
 .button-quiet { border-color: var(--border); background: transparent; color: #c5cad2; }

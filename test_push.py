@@ -22,10 +22,10 @@ class PushTests(unittest.TestCase):
         self.db.row_factory = sqlite3.Row
         self.db.executescript("""
             PRAGMA foreign_keys=ON;
-            CREATE TABLE users (id INTEGER PRIMARY KEY,active INTEGER);
+            CREATE TABLE users (id INTEGER PRIMARY KEY,active INTEGER,language TEXT DEFAULT 'en');
             CREATE TABLE sessions (token_hash TEXT PRIMARY KEY,user_id INTEGER,expires_at TEXT);
             CREATE TABLE tickets (id INTEGER PRIMARY KEY,assignee_id INTEGER,status TEXT);
-            INSERT INTO users VALUES (1,1),(2,1);
+            INSERT INTO users (id,active) VALUES (1,1),(2,1);
             INSERT INTO sessions VALUES ('session1',1,'9999'),('session2',2,'9999');
             INSERT INTO tickets VALUES (1,1,'received');
         """)
@@ -65,6 +65,15 @@ class PushTests(unittest.TestCase):
         self.db.execute("UPDATE tickets SET status='done'")
         push.enqueue_assignment(self.db, self.db.execute("SELECT * FROM tickets").fetchone())
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM push_jobs").fetchone()[0], 2)
+
+    def test_notifications_follow_recipient_language(self):
+        self.db.execute("UPDATE users SET language='sr-Latn' WHERE id=1")
+        self.queue()
+        payload = json.loads(self.db.execute("SELECT payload FROM push_jobs").fetchone()[0])
+        self.assertEqual(payload["title"], "Dodeljen vam je novi servis")
+        push.enqueue_test(self.db, 1)
+        payload = json.loads(self.db.execute("SELECT payload FROM push_jobs ORDER BY id DESC").fetchone()[0])
+        self.assertEqual(payload["title"], "FurnaceDesk obaveštenja")
 
     @patch("push.webpush")
     def test_delivery_and_stale_assignment(self, send):
